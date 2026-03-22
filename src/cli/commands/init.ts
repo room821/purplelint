@@ -5,6 +5,7 @@ import { stringify as stringifyYaml } from "yaml";
 import { scanProject } from "../../core/scanner.js";
 import type { ScanResult } from "../../core/scanner.js";
 import type { PurplelintConfig } from "../../types/config.js";
+import { maybePromptGithubStar } from "../star-prompt.js";
 import * as ui from "../ui.js";
 
 export interface InitOptions {
@@ -159,9 +160,8 @@ export async function runInit(options: InitOptions) {
 	ui.log("Add to CI (GitHub Actions):");
 	ui.log("   - run: npx purplelint run --all --output json > purplelint.json");
 
-	// Star
-	ui.log("");
-	ui.log("Like it? Star us: https://github.com/room821/purplelint");
-
 	ui.outro("Ready");
+
+	// Star prompt — one-time, only if gh CLI is available
+	await maybePromptGithubStar();
 }
