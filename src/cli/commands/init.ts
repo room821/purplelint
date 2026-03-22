@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { stringify as stringifyYaml } from "yaml";
@@ -156,14 +156,32 @@ export async function runInit(options: InitOptions) {
 		ui.log("");
 		ui.log(`Detected: ${agents.map((a) => a.name).join(", ")}`);
 
-		const tryNow = await p.confirm({
-			message: `Run a quick architecture check with ${agents[0].name}?`,
-			initialValue: true,
-		});
+		let chosenAgent: AgentInfo | null = null;
 
-		if (!p.isCancel(tryNow) && tryNow) {
+		if (agents.length === 1) {
+			const tryNow = await p.confirm({
+				message: `Run a quick architecture check with ${agents[0].name}?`,
+				initialValue: true,
+			});
+			if (!p.isCancel(tryNow) && tryNow) {
+				chosenAgent = agents[0];
+			}
+		} else {
+			const choice = await p.select({
+				message: "Continue with:",
+				options: [
+					...agents.map((a) => ({ value: a.cmd, label: a.name })),
+					{ value: "skip", label: "Skip" },
+				],
+			});
+			if (!p.isCancel(choice) && choice !== "skip") {
+				chosenAgent = agents.find((a) => a.cmd === choice) ?? null;
+			}
+		}
+
+		if (chosenAgent) {
 			ui.log("");
-			ui.log(`Running: npx purplelint run --all --output prompt | ${agents[0].cmd}`);
+			ui.log(`Running: npx purplelint run --all --output prompt | ${chosenAgent.cmd}`);
 			ui.log("");
 
 			const result = spawnSync(
@@ -173,7 +191,7 @@ export async function runInit(options: InitOptions) {
 			);
 
 			if (result.stdout) {
-				const child = spawnSync(agents[0].cmd, [], {
+				const child = spawnSync(chosenAgent.cmd, [], {
 					input: result.stdout,
 					encoding: "utf-8",
 					stdio: ["pipe", "inherit", "inherit"],
@@ -181,14 +199,14 @@ export async function runInit(options: InitOptions) {
 				});
 
 				if (child.error) {
-					ui.warn(`Could not pipe to ${agents[0].cmd}: ${child.error.message}`);
+					ui.warn(`Could not pipe to ${chosenAgent.cmd}: ${child.error.message}`);
 					ui.log("You can run it manually:");
-					ui.log(`   npx purplelint run --all --output prompt | ${agents[0].cmd}`);
+					ui.log(`   npx purplelint run --all --output prompt | ${chosenAgent.cmd}`);
 				}
 			} else {
 				ui.warn("No output generated (no changed files?)");
 				ui.log("Try after making some changes:");
-				ui.log(`   npx purplelint run --all --output prompt | ${agents[0].cmd}`);
+				ui.log(`   npx purplelint run --all --output prompt | ${chosenAgent.cmd}`);
 			}
 		}
 	} else {
@@ -200,30 +218,140 @@ export async function runInit(options: InitOptions) {
 		ui.log('   Add to .cursorrules: "Read /purplelint and check changes against each purpose."');
 	}
 
-	// CI setup
+	// Build integration — when should purplelint run?
+	const pkgPath = join(process.cwd(), "package.json");
 	const hasGithubDir = existsSync(join(process.cwd(), ".github"));
 	const ciPath = join(process.cwd(), ".github", "workflows", "purplelint.yml");
 	const ciExists = existsSync(ciPath);
+	const huskyDir = join(process.cwd(), ".husky");
+	const hasHusky = existsSync(huskyDir);
+
+	let scriptsAdded = false;
+	let hookAdded = false;
 	let ciCreated = false;
 
-	if (!ciExists) {
-		ui.log("");
-		const addCI = await p.confirm({
-			message: `Add purplelint to GitHub Actions CI?${hasGithubDir ? "" : " (.github/ will be created)"}`,
-			initialValue: true,
-		});
+	type RunTiming = "commit" | "push" | "pr" | "script";
 
-		if (!p.isCancel(addCI) && addCI) {
-			const workflowDir = join(process.cwd(), ".github", "workflows");
-			mkdirSync(workflowDir, { recursive: true });
-			writeFileSync(ciPath, CI_WORKFLOW);
-			ui.success("Created .github/workflows/purplelint.yml");
-			ciCreated = true;
+	const timingOptions: { value: RunTiming; label: string; hint: string }[] = [
+		{
+			value: "commit",
+			label: "Every commit (pre-commit hook)",
+			hint: "dev/main 브랜치에서 커밋할 때마다 validate",
+		},
+		{
+			value: "push",
+			label: "Before push (pre-push hook)",
+			hint: "push 직전에 validate — 커밋은 자유롭게",
+		},
+		{
+			value: "pr",
+			label: "PR only (GitHub Actions CI)",
+			hint: "main PR 때만 validate + full check",
+		},
+		{
+			value: "script",
+			label: "Manual only (npm run purplelint)",
+			hint: "자동 실행 없이 필요할 때만 수동으로",
+		},
+	];
+
+	ui.log("");
+	const timing = await p.select({
+		message: "When should purplelint run?",
+		options: timingOptions,
+	});
+
+	if (!p.isCancel(timing)) {
+		const selected = timing as RunTiming;
+
+		// Always add npm scripts if package.json exists
+		if (existsSync(pkgPath)) {
+			try {
+				const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+				const scripts = pkg.scripts || {};
+				const hasPurplelint = Object.values(scripts).some(
+					(v) => typeof v === "string" && v.includes("purplelint"),
+				);
+
+				if (!hasPurplelint) {
+					pkg.scripts = {
+						...scripts,
+						purplelint: "purplelint run --all",
+						"purplelint:validate": "purplelint validate",
+					};
+					writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+					ui.success("Added npm run purplelint / purplelint:validate");
+					scriptsAdded = true;
+				}
+			} catch {
+				// skip if package.json is malformed
+			}
+		}
+
+		// Git hook setup (commit or push)
+		if (selected === "commit" || selected === "push") {
+			const hookType = selected === "commit" ? "pre-commit" : "pre-push";
+
+			if (hasHusky) {
+				const hookFile = join(huskyDir, hookType);
+				const hookExists = existsSync(hookFile);
+				const alreadyHas = hookExists && readFileSync(hookFile, "utf-8").includes("purplelint");
+
+				if (!alreadyHas) {
+					const existing = hookExists ? readFileSync(hookFile, "utf-8") : "";
+					const hookSnippet = `# purplelint — only on protected branches
+branch=$(git rev-parse --abbrev-ref HEAD)
+if echo "$branch" | grep -qE "^(main|master|dev|develop|staging)$"; then
+  npx purplelint validate
+fi`;
+					const content = existing ? `${existing.trimEnd()}\n${hookSnippet}\n` : `${hookSnippet}\n`;
+					writeFileSync(hookFile, content);
+					ui.success(`Added purplelint validate to .husky/${hookType} (protected branches)`);
+					hookAdded = true;
+				}
+			} else {
+				ui.log("");
+				ui.log(`To set up manually, add to your ${hookType} hook:`);
+				ui.log("   npx purplelint validate");
+			}
+		}
+
+		// CI setup (pr mode, or also for commit/push as bonus)
+		if (!ciExists) {
+			if (selected === "pr") {
+				const workflowDir = join(process.cwd(), ".github", "workflows");
+				mkdirSync(workflowDir, { recursive: true });
+				writeFileSync(ciPath, CI_WORKFLOW);
+				ui.success("Created .github/workflows/purplelint.yml");
+				ciCreated = true;
+			} else {
+				const addCI = await p.confirm({
+					message: `Also add to GitHub Actions CI?${hasGithubDir ? "" : " (.github/ will be created)"}`,
+					initialValue: false,
+				});
+
+				if (!p.isCancel(addCI) && addCI) {
+					const workflowDir = join(process.cwd(), ".github", "workflows");
+					mkdirSync(workflowDir, { recursive: true });
+					writeFileSync(ciPath, CI_WORKFLOW);
+					ui.success("Created .github/workflows/purplelint.yml");
+					ciCreated = true;
+				}
+			}
 		}
 	}
 
 	// Save setup doc
-	const setupDoc = generateSetupDoc(selectedResults, agents, ciCreated);
+	const hookType =
+		!p.isCancel(timing) && (timing === "commit" || timing === "push") ? (timing as string) : null;
+	const setupDoc = generateSetupDoc(
+		selectedResults,
+		agents,
+		ciCreated,
+		scriptsAdded,
+		hookAdded,
+		hookType,
+	);
 	const setupPath = join(ailintDir, "SETUP.md");
 	writeFileSync(setupPath, setupDoc);
 	ui.log("");
@@ -262,7 +390,14 @@ jobs:
           path: purplelint-results.json
 `;
 
-function generateSetupDoc(results: ScanResult[], agents: AgentInfo[], ciCreated: boolean): string {
+function generateSetupDoc(
+	results: ScanResult[],
+	agents: AgentInfo[],
+	ciCreated: boolean,
+	scriptsAdded: boolean,
+	hookAdded: boolean,
+	hookType: string | null,
+): string {
 	const date = new Date().toISOString().split("T")[0];
 	const purposeList = results.map(
 		(r) =>
@@ -299,7 +434,30 @@ npx purplelint list
 npx purplelint validate
 \`\`\`
 
-## AI Agent Integration
+## Build Integration
+
+`;
+
+	if (scriptsAdded) {
+		doc += `Scripts added to \`package.json\`:
+
+\`\`\`bash
+npm run purplelint            # Run all architecture checks
+npm run purplelint:validate   # Validate purpose file schema
+\`\`\`
+
+`;
+	}
+
+	if (hookAdded && hookType) {
+		const hookLabel = hookType === "commit" ? "pre-commit" : "pre-push";
+		doc += `Git hook: \`purplelint validate\` runs as \`${hookLabel}\` on protected branches (\`main\`, \`dev\`, \`develop\`, \`staging\`).
+Feature branches are not affected.
+
+`;
+	}
+
+	doc += `## AI Agent Integration
 
 `;
 
