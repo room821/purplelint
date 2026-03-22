@@ -200,10 +200,34 @@ export async function runInit(options: InitOptions) {
 		ui.log('   Add to .cursorrules: "Read /purplelint and check changes against each purpose."');
 	}
 
-	// CI hint
+	// CI setup
+	const hasGithubDir = existsSync(join(process.cwd(), ".github"));
+	const ciPath = join(process.cwd(), ".github", "workflows", "purplelint.yml");
+	const ciExists = existsSync(ciPath);
+	let ciCreated = false;
+
+	if (!ciExists) {
+		ui.log("");
+		const addCI = await p.confirm({
+			message: `Add purplelint to GitHub Actions CI?${hasGithubDir ? "" : " (.github/ will be created)"}`,
+			initialValue: true,
+		});
+
+		if (!p.isCancel(addCI) && addCI) {
+			const workflowDir = join(process.cwd(), ".github", "workflows");
+			mkdirSync(workflowDir, { recursive: true });
+			writeFileSync(ciPath, CI_WORKFLOW);
+			ui.success("Created .github/workflows/purplelint.yml");
+			ciCreated = true;
+		}
+	}
+
+	// Save setup doc
+	const setupDoc = generateSetupDoc(selectedResults, agents, ciCreated);
+	const setupPath = join(ailintDir, "SETUP.md");
+	writeFileSync(setupPath, setupDoc);
 	ui.log("");
-	ui.log("Add to CI (GitHub Actions):");
-	ui.log("   - run: npx purplelint run --all --output json > purplelint.json");
+	ui.success("Saved setup guide: purplelint/SETUP.md");
 
 	ui.outro("Ready");
 
@@ -214,6 +238,124 @@ export async function runInit(options: InitOptions) {
 interface AgentInfo {
 	name: string;
 	cmd: string;
+}
+
+const CI_WORKFLOW = `name: purplelint
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  architecture-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npx purplelint validate
+      - run: npx purplelint run --all --output json > purplelint-results.json
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: purplelint-results
+          path: purplelint-results.json
+`;
+
+function generateSetupDoc(results: ScanResult[], agents: AgentInfo[], ciCreated: boolean): string {
+	const date = new Date().toISOString().split("T")[0];
+	const purposeList = results.map(
+		(r) =>
+			`- **${r.purposeData.id}** (${r.category}) — ${r.purposeData.purpose.split(".")[0].trim()}`,
+	);
+
+	let doc = `# purplelint Setup
+
+Initialized on ${date}.
+
+## Configured Purposes (${results.length})
+
+${purposeList.join("\n")}
+
+## Usage
+
+\`\`\`bash
+# Interactive check — pick which purposes to evaluate
+npx purplelint run -i
+
+# Check all purposes
+npx purplelint run --all
+
+# Check a single purpose
+npx purplelint run --purpose billing-tracking
+
+# Skip a purpose for N days
+npx purplelint skip billing-tracking 7
+
+# List all configured purposes
+npx purplelint list
+
+# Validate purpose file schema
+npx purplelint validate
+\`\`\`
+
+## AI Agent Integration
+
+`;
+
+	if (agents.length > 0) {
+		doc += `Detected agents: ${agents.map((a) => a.name).join(", ")}\n\n`;
+	}
+
+	doc += `\`\`\`bash
+# Claude Code
+npx purplelint run --all --output prompt | claude
+
+# OpenAI Codex
+npx purplelint run --all --output prompt | codex
+
+# Output as JSON (for custom pipelines)
+npx purplelint run --all --output json
+\`\`\`
+
+**Cursor / Windsurf:** Add to \`.cursorrules\` or \`.windsurfrules\`:
+\`\`\`
+Before building, read the /purplelint directory and evaluate changes against each purpose.
+\`\`\`
+
+## CI/CD
+
+`;
+
+	if (ciCreated) {
+		doc += `GitHub Actions workflow created at \`.github/workflows/purplelint.yml\`.
+Runs automatically on pull requests to \`main\`.
+`;
+	} else {
+		doc += `To add to GitHub Actions, create \`.github/workflows/purplelint.yml\`:
+
+\`\`\`yaml
+- run: npx purplelint validate
+- run: npx purplelint run --all --output json > purplelint-results.json
+\`\`\`
+`;
+	}
+
+	doc += `
+## Files
+
+| File | Description |
+|------|-------------|
+| \`purplelint/purplelint.yml\` | Config index — lists all purposes and settings |
+${results.map((r) => `| \`purplelint/${r.purposeData.id}.yml\` | ${r.category}: ${r.purposeData.purpose.split(".")[0].trim()} |`).join("\n")}
+
+## Links
+
+- npm: https://www.npmjs.com/package/purplelint
+- GitHub: https://github.com/room821/purplelint
+`;
+
+	return doc;
 }
 
 function detectAgents(): AgentInfo[] {
