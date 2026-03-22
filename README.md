@@ -1,6 +1,5 @@
 <p align="center">
-  <strong>purplelint</strong><br>
-  Purpose-driven architecture linting. Agent-agnostic. Open spec.
+  <img src="assets/banner.jpg" alt="PurpleLint — Architecture Intent Linter" width="100%">
 </p>
 
 <p align="center">
