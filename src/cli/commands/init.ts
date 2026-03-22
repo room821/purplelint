@@ -128,19 +128,40 @@ export async function runInit(options: InitOptions) {
 	writeFileSync(join(ailintDir, "purplelint.yml"), stringifyYaml(config));
 	createdFiles.unshift("purplelint.yml");
 
-	// Output
+	// Output — onboarding
 	ui.log("");
-	ui.success("purplelint initialized!");
+	ui.success(`purplelint initialized! ${selectedResults.length} purpose(s) configured.`);
 	ui.log("");
+
+	// Files created
 	ui.log("Created:");
 	for (const f of createdFiles) {
 		ui.log(`   purplelint/${f}`);
 	}
-	ui.log("");
-	ui.log("Next steps:");
-	ui.log("   1. Review generated purposes — they're tailored to YOUR project");
-	ui.log("   2. Run: npx purplelint validate");
-	ui.log("   3. Run: npx purplelint run");
 
-	ui.outro("Done");
+	// How to use
+	ui.log("");
+	ui.log("How to use:");
+	ui.log("   npx purplelint run -i          Interactive check (pick purposes)");
+	ui.log("   npx purplelint run --all       Check all purposes at once");
+	ui.log("   npx purplelint skip <id> <d>   Skip a purpose for N days");
+	ui.log("   npx purplelint list            Show configured purposes");
+
+	// Agent integration
+	ui.log("");
+	ui.log("Plug into your AI agent:");
+	ui.log("   npx purplelint run --all --output prompt | claude");
+	ui.log("   npx purplelint run --all --output prompt | codex");
+	ui.log('   Add to .cursorrules: "Read /purplelint and check changes against each purpose."');
+
+	// CI hint
+	ui.log("");
+	ui.log("Add to CI (GitHub Actions):");
+	ui.log("   - run: npx purplelint run --all --output json > purplelint.json");
+
+	// Star
+	ui.log("");
+	ui.log("Like it? Star us: https://github.com/room821/purplelint");
+
+	ui.outro("Ready");
 }
