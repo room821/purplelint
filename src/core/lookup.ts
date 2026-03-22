@@ -1,20 +1,20 @@
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parseConfig, validateConfig } from "./config.js";
-import type { AilintConfig } from "../types/config.js";
+import type { PurplelintConfig } from "../types/config.js";
 
 /**
- * Finds ailint/ directories by walking up from the given file path to rootDir.
+ * Finds purplelint/ directories by walking up from the given file path to rootDir.
  * Returns configs from closest to farthest (cascading lookup like .gitignore).
  */
-export function lookupAilintConfigs(filePath: string, rootDir: string): AilintConfig[] {
-	const configs: AilintConfig[] = [];
+export function lookupAilintConfigs(filePath: string, rootDir: string): PurplelintConfig[] {
+	const configs: PurplelintConfig[] = [];
 	const absRoot = resolve(rootDir);
 	let current = resolve(dirname(filePath));
 
 	while (true) {
-		const ailintDir = join(current, "ailint");
-		const ailintYml = join(ailintDir, "ailint.yml");
+		const ailintDir = join(current, "purplelint");
+		const ailintYml = join(ailintDir, "purplelint.yml");
 
 		if (existsSync(ailintYml)) {
 			try {
@@ -45,7 +45,7 @@ export function lookupAilintConfigs(filePath: string, rootDir: string): AilintCo
  * Merges multiple configs (closest-first order).
  * Closer configs override farther ones. Stops at inherit: false.
  */
-export function mergeConfigs(configs: AilintConfig[]): AilintConfig {
+export function mergeConfigs(configs: PurplelintConfig[]): PurplelintConfig {
 	if (configs.length === 0) {
 		return { version: "0.1", purposes: [] };
 	}
@@ -54,7 +54,7 @@ export function mergeConfigs(configs: AilintConfig[]): AilintConfig {
 		return configs[0];
 	}
 
-	const merged: AilintConfig = {
+	const merged: PurplelintConfig = {
 		version: configs[0].version,
 		config: { ...configs[configs.length - 1].config },
 		purposes: [],

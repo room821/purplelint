@@ -4,7 +4,7 @@ import * as p from "@clack/prompts";
 import { stringify as stringifyYaml } from "yaml";
 import { scanProject } from "../../core/scanner.js";
 import type { ScanResult } from "../../core/scanner.js";
-import type { AilintConfig } from "../../types/config.js";
+import type { PurplelintConfig } from "../../types/config.js";
 import * as ui from "../ui.js";
 
 export interface InitOptions {
@@ -16,10 +16,10 @@ export interface InitOptions {
 export async function runInit(options: InitOptions) {
 	ui.intro();
 
-	const ailintDir = resolve(options.dir || join(process.cwd(), "ailint"));
+	const ailintDir = resolve(options.dir || join(process.cwd(), "purplelint"));
 
 	if (existsSync(ailintDir)) {
-		ui.warn(`ailint directory already exists: ${ailintDir}`);
+		ui.warn(`purplelint directory already exists: ${ailintDir}`);
 		ui.log("Skipping initialization. Use --dir to specify a different location.");
 		ui.outro("Already initialized");
 		return;
@@ -34,11 +34,11 @@ export async function runInit(options: InitOptions) {
 	s.stop(`Found ${scanResults.length} architecture pattern(s)`);
 
 	if (scanResults.length === 0) {
-		ui.warn("No patterns detected. Creating empty ailint config.");
-		ui.log("You can add purpose files manually — see: npx ailint --help");
+		ui.warn("No patterns detected. Creating empty purplelint config.");
+		ui.log("You can add purpose files manually — see: npx purplelint --help");
 
 		mkdirSync(ailintDir, { recursive: true });
-		const config: AilintConfig = {
+		const config: PurplelintConfig = {
 			version: "0.1",
 			config: {
 				context_strategy: "diff+imports",
@@ -53,8 +53,8 @@ export async function runInit(options: InitOptions) {
 			},
 			purposes: [],
 		};
-		writeFileSync(join(ailintDir, "ailint.yml"), stringifyYaml(config));
-		ui.success("Created ailint/ailint.yml (empty)");
+		writeFileSync(join(ailintDir, "purplelint.yml"), stringifyYaml(config));
+		ui.success("Created purplelint/purplelint.yml (empty)");
 		ui.outro("Done");
 		return;
 	}
@@ -116,8 +116,8 @@ export async function runInit(options: InitOptions) {
 		createdFiles.push(fileName);
 	}
 
-	// Create ailint.yml index
-	const config: AilintConfig = {
+	// Create purplelint.yml index
+	const config: PurplelintConfig = {
 		version: "0.1",
 		config: {
 			context_strategy: "diff+imports",
@@ -141,25 +141,22 @@ export async function runInit(options: InitOptions) {
 		})),
 	};
 
-	writeFileSync(join(ailintDir, "ailint.yml"), stringifyYaml(config));
-	createdFiles.unshift("ailint.yml");
+	writeFileSync(join(ailintDir, "purplelint.yml"), stringifyYaml(config));
+	createdFiles.unshift("purplelint.yml");
 
 	// Output
 	ui.log("");
-	ui.success("ailint initialized!");
+	ui.success("purplelint initialized!");
 	ui.log("");
 	ui.log("Created:");
 	for (const f of createdFiles) {
-		ui.log(`   ailint/${f}`);
+		ui.log(`   purplelint/${f}`);
 	}
 	ui.log("");
 	ui.log("Next steps:");
 	ui.log("   1. Review generated purposes — they're tailored to YOUR project");
-	ui.log("   2. Run: npx ailint validate");
-	ui.log("   3. Run: npx ailint run");
-	ui.log("");
-	ui.log("Like ailint? Star us on GitHub!");
-	ui.log("   https://github.com/room821/ailint");
+	ui.log("   2. Run: npx purplelint validate");
+	ui.log("   3. Run: npx purplelint run");
 
 	ui.outro("Done");
 }

@@ -52,19 +52,47 @@ export async function scanProject(cwd: string): Promise<ScanResult[]> {
 		dot: false,
 	});
 
+	// Merge all package.json deps (root + monorepo subdirectories)
+	const allNodeDeps: Record<string, string> = {};
+	const subDirs = ["api", "server", "backend", "worker", "web", "frontend", "client", "app"];
+
+	// Also find packages/*/package.json and apps/*/package.json
+	const pkgJsonPaths = [join(cwd, "package.json")];
+	for (const sub of subDirs) {
+		pkgJsonPaths.push(join(cwd, sub, "package.json"));
+	}
+	// Scan packages/* and apps/*
+	for (const mono of ["packages", "apps"]) {
+		const monoDir = join(cwd, mono);
+		if (existsSync(monoDir)) {
+			try {
+				for (const entry of readdirSync(monoDir)) {
+					pkgJsonPaths.push(join(monoDir, entry, "package.json"));
+				}
+			} catch { /* ignore */ }
+		}
+	}
+
 	let packageJson: Record<string, any> | null = null;
-	const pkgPath = join(cwd, "package.json");
-	if (existsSync(pkgPath)) {
-		try {
-			packageJson = JSON.parse(readFileSync(pkgPath, "utf-8"));
-		} catch { /* ignore */ }
+	for (const pkgPath of pkgJsonPaths) {
+		if (existsSync(pkgPath)) {
+			try {
+				const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+				if (!packageJson) packageJson = pkg;
+				Object.assign(allNodeDeps, pkg.dependencies || {}, pkg.devDependencies || {});
+			} catch { /* ignore */ }
+		}
+	}
+	// Attach merged deps so hasDependency can find them
+	if (packageJson) {
+		packageJson = { ...packageJson, dependencies: allNodeDeps, devDependencies: {} };
+	} else if (Object.keys(allNodeDeps).length > 0) {
+		packageJson = { dependencies: allNodeDeps, devDependencies: {} };
 	}
 
 	// Parse Python dependencies (root + subdirectories for monorepos)
 	const pythonDeps = parsePythonDeps(cwd);
 
-	// Also check common monorepo subdirectories
-	const subDirs = ["api", "server", "backend", "worker", "packages", "apps", "services"];
 	for (const sub of subDirs) {
 		const subPath = join(cwd, sub);
 		if (existsSync(subPath)) {
@@ -657,6 +685,99 @@ const DETECTORS: Detector[] = [
 					},
 					context_hint: "Check if expect/assert statements validate meaningful business outcomes. Flag toBeDefined(), toBeTruthy() as sole assertions. Flag .toThrow() without a specific error class.",
 					scope: ctx.primaryLang === "py" ? "**/test_*.py" : "**/*.{test,spec}.{ts,js,tsx,jsx}",
+					severity: "warning",
+				},
+			};
+		},
+	},
+
+	// 7. Design System Enforcement
+	{
+		name: "design-system",
+		category: "design",
+		detect(ctx) {
+			// Detect UI framework first
+			const react = hasDependency(ctx, "react", "next", "react-dom");
+			const vue = hasDependency(ctx, "vue", "nuxt");
+			const svelte = hasDependency(ctx, "svelte", "@sveltejs/kit");
+			const uiFramework = react || vue || svelte;
+
+			if (!uiFramework) return null;
+
+			// Detect design system
+			const shadcn = hasDependency(ctx, "@radix-ui/react-slot", "@radix-ui/react-dialog");
+			const mui = hasDependency(ctx, "@mui/material", "@mui/joy");
+			const antd = hasDependency(ctx, "antd", "@ant-design/icons");
+			const chakra = hasDependency(ctx, "@chakra-ui/react");
+			const mantine = hasDependency(ctx, "@mantine/core");
+			const tailwind = hasDependency(ctx, "tailwindcss");
+
+			// Check for custom tokens/theme files
+			const themeFiles = hasFiles(ctx, ["theme", "tokens", "design-system", "design-tokens"]);
+			const componentLib = hasFiles(ctx, ["ui/button", "ui/input", "ui/modal", "ui/dialog", "components/ui"]);
+
+			const dsName = shadcn ? "shadcn/ui" : mui ? "MUI" : antd ? "Ant Design" : chakra ? "Chakra UI" : mantine ? "Mantine" : null;
+
+			// Need either a known DS or custom component lib
+			if (!dsName && componentLib.length < 2 && themeFiles.length === 0) return null;
+
+			const systemLabel = dsName || "custom component library";
+			const tokenFile = themeFiles.length > 0 ? themeFiles[0] : "your design tokens file";
+
+			// Find evidence of raw HTML/inline styles
+			const rawEvidence = searchFiles(
+				ctx,
+				[
+					"style={{",
+					"className=\"bg-",
+					"text-gray-",
+					"text-blue-",
+					"text-red-",
+					"bg-gray-",
+					"bg-blue-",
+					"bg-white",
+					"bg-black",
+					"#ffffff",
+					"#000000",
+					"color:",
+					"font-size:",
+					"<button",
+					"<input ",
+				],
+				[`**/*.${react ? "tsx" : vue ? "vue" : "svelte"}`],
+			);
+
+			return {
+				category: "design",
+				label: `${systemLabel} detected${tailwind ? " + Tailwind" : ""}`,
+				evidence: [
+					...componentLib.slice(0, 2).map((f) => ({ file: f, snippet: `Component library: ${f}` })),
+					...themeFiles.slice(0, 2).map((f) => ({ file: f, snippet: `Theme/tokens: ${f}` })),
+					...rawEvidence.slice(0, 3),
+				].slice(0, 5),
+				purposeData: {
+					id: "design-system",
+					purpose: `All UI must use ${systemLabel} components and design tokens. Raw HTML elements (<button>, <input>), inline styles, and hardcoded colors/spacing bypass the design system, causing visual inconsistency, accessibility gaps, and theme-breaking changes.`,
+					violations: [
+						`Raw HTML elements (<button>, <input>, <select>) instead of ${systemLabel} components`,
+						"Inline styles (style={{}}) instead of design tokens or utility classes",
+						"Raw Tailwind color classes (text-gray-900, bg-blue-500) instead of semantic tokens (text-primary, bg-accent)",
+						"Hardcoded color values (#fff, rgb(), hsl()) instead of theme tokens",
+						"Hardcoded spacing/font-size values instead of scale tokens",
+						`New UI components that don't extend from ${systemLabel} primitives`,
+					],
+					good_example: {
+						title: `Using ${systemLabel} components`,
+						code: react
+							? `import { Button } from "@/components/ui/button";\nimport { Input } from "@/components/ui/input";\n\n<Button variant="primary" size="md">\n  Submit\n</Button>`
+							: `<Button variant="primary" size="md">Submit</Button>`,
+					},
+					bad_example: {
+						title: "Raw HTML with inline styles",
+						code: `<button\n  style={{ backgroundColor: "#3b82f6", padding: "8px 16px", borderRadius: "4px" }}\n>\n  Submit\n</button>\n// Bypasses theme, breaks dark mode, inconsistent with other buttons`,
+					},
+					context_hint: `Scan for raw HTML form elements and inline style={{}} in component files. Every <button>, <input>, <select>, <textarea> should use ${systemLabel}. Check for hardcoded hex/rgb colors outside ${tokenFile}.`,
+					scope: langGlob(ctx),
 					severity: "warning",
 				},
 			};

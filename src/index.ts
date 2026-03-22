@@ -1,8 +1,8 @@
 export type {
-	AilintConfig,
-	AilintGlobalConfig,
-	AilintPurposeEntry,
-	AilintRunResult,
+	PurplelintConfig,
+	PurplelintGlobalConfig,
+	PurplelintPurposeEntry,
+	PurplelintRunResult,
 	Confidence,
 	ContextStrategy,
 	OutputFormat,

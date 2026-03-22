@@ -28,14 +28,14 @@ export async function runRun(options: RunOptions) {
 	const ailintDir = resolve(options.dir || findAilintDir());
 
 	if (!existsSync(ailintDir)) {
-		ui.error(`ailint directory not found: ${ailintDir}`);
-		ui.log('Run "npx ailint init" to create one.');
+		ui.error(`purplelint directory not found: ${ailintDir}`);
+		ui.log('Run "npx purplelint init" to create one.');
 		process.exit(1);
 	}
 
-	const indexPath = join(ailintDir, "ailint.yml");
+	const indexPath = join(ailintDir, "purplelint.yml");
 	if (!existsSync(indexPath)) {
-		ui.error(`ailint.yml not found in ${ailintDir}`);
+		ui.error(`purplelint.yml not found in ${ailintDir}`);
 		process.exit(1);
 	}
 
@@ -138,7 +138,7 @@ export async function runRun(options: RunOptions) {
 		if (outputFormat === "prompt") {
 			console.log("");
 			console.log("---");
-			console.log(`# ailint purpose: ${purposeId}`);
+			console.log(`# purplelint purpose: ${purposeId}`);
 			console.log("");
 			console.log(prompt);
 			console.log("---");
@@ -157,13 +157,13 @@ export async function runRun(options: RunOptions) {
 
 function findAilintDir(): string {
 	const candidates = [
-		join(process.cwd(), "ailint"),
-		join(process.cwd(), ".ailint"),
+		join(process.cwd(), "purplelint"),
+		join(process.cwd(), ".purplelint"),
 	];
 
 	for (const dir of candidates) {
 		if (existsSync(dir)) return dir;
 	}
 
-	return join(process.cwd(), "ailint");
+	return join(process.cwd(), "purplelint");
 }

@@ -5,13 +5,13 @@ import { runRun } from "./commands/run.js";
 import { runValidate } from "./commands/validate.js";
 
 const HELP = `
-  ailint — Purpose-driven architecture linting protocol
+  purplelint — Purpose-driven architecture linting protocol
 
   Usage:
-    ailint <command> [options]
+    purplelint <command> [options]
 
   Commands:
-    init        Initialize ailint in your project
+    init        Initialize purplelint in your project
     validate    Validate purpose files against schema
     run         Run architecture checks
     list        List configured purposes
@@ -21,11 +21,11 @@ const HELP = `
     --version   Show version
 
   Examples:
-    npx ailint init
-    npx ailint validate
-    npx ailint run -i
-    npx ailint run --purpose billing
-    npx ailint list
+    npx purplelint init
+    npx purplelint validate
+    npx purplelint run -i
+    npx purplelint run --purpose billing
+    npx purplelint list
 `;
 
 async function main() {
@@ -38,7 +38,7 @@ async function main() {
 	}
 
 	if (command === "--version") {
-		console.log("ailint 0.1.0");
+		console.log("purplelint 0.2.0");
 		process.exit(0);
 	}
 

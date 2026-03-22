@@ -5,7 +5,7 @@ import { lookupAilintConfigs, mergeConfigs } from "../../src/core/lookup.js";
 const FIXTURES = join(import.meta.dirname, "..", "fixtures");
 
 describe("lookupAilintConfigs", () => {
-	it("finds ailint config in single-repo root", () => {
+	it("finds purplelint config in single-repo root", () => {
 		const rootDir = join(FIXTURES, "single-repo");
 		const filePath = join(rootDir, "src", "services", "chat.ts");
 		const configs = lookupAilintConfigs(filePath, rootDir);
@@ -17,7 +17,7 @@ describe("lookupAilintConfigs", () => {
 		const rootDir = join(FIXTURES, "monorepo");
 		const filePath = join(rootDir, "packages", "api", "src", "handler.ts");
 		const configs = lookupAilintConfigs(filePath, rootDir);
-		// Should find: packages/api/ailint + root ailint
+		// Should find: packages/api/purplelint + root purplelint
 		expect(configs.length).toBeGreaterThanOrEqual(2);
 	});
 
@@ -25,15 +25,15 @@ describe("lookupAilintConfigs", () => {
 		const rootDir = join(FIXTURES, "monorepo");
 		const filePath = join(rootDir, "packages", "api", "src", "handler.ts");
 		const configs = lookupAilintConfigs(filePath, rootDir);
-		// First config should be from packages/api/ailint
+		// First config should be from packages/api/purplelint
 		expect(configs[0].purposes.some((p) => p.id === "auth-boundary")).toBe(true);
 	});
 
-	it("returns empty array when no ailint dir exists", () => {
+	it("returns empty array when no purplelint dir exists", () => {
 		const rootDir = join(FIXTURES, "single-repo");
 		const filePath = join(rootDir, "nonexistent", "deep", "file.ts");
 		const configs = lookupAilintConfigs(filePath, rootDir);
-		// Will still find root level ailint
+		// Will still find root level purplelint
 		expect(configs.length).toBeGreaterThanOrEqual(0);
 	});
 });

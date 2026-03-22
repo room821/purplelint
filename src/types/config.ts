@@ -3,7 +3,7 @@ export type OutputFormat = "json" | "markdown" | "sarif";
 export type Confidence = "high" | "medium" | "low";
 export type Severity = "error" | "warning" | "info";
 
-export interface AilintGlobalConfig {
+export interface PurplelintGlobalConfig {
 	context_strategy?: ContextStrategy;
 	output_format?: OutputFormat;
 	inherit?: boolean;
@@ -11,7 +11,7 @@ export interface AilintGlobalConfig {
 	ignore?: string[];
 }
 
-export interface AilintPurposeEntry {
+export interface PurplelintPurposeEntry {
 	id: string;
 	file: string;
 	severity?: Severity;
@@ -19,8 +19,8 @@ export interface AilintPurposeEntry {
 	ignore?: string[];
 }
 
-export interface AilintConfig {
+export interface PurplelintConfig {
 	version: string;
-	config?: AilintGlobalConfig;
-	purposes: AilintPurposeEntry[];
+	config?: PurplelintGlobalConfig;
+	purposes: PurplelintPurposeEntry[];
 }

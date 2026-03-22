@@ -1,7 +1,7 @@
 import * as p from "@clack/prompts";
 
 export function intro() {
-	p.intro("ailint — Architecture Checkpoint");
+	p.intro("purplelint — Architecture Checkpoint");
 }
 
 export function outro(message: string) {

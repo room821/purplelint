@@ -12,14 +12,14 @@ export async function runValidate(options: ValidateOptions) {
 	const ailintDir = resolve(options.dir || findAilintDir());
 
 	if (!existsSync(ailintDir)) {
-		ui.error(`ailint directory not found: ${ailintDir}`);
-		ui.log('Run "npx ailint init" to create one.');
+		ui.error(`purplelint directory not found: ${ailintDir}`);
+		ui.log('Run "npx purplelint init" to create one.');
 		process.exit(1);
 	}
 
-	const indexPath = join(ailintDir, "ailint.yml");
+	const indexPath = join(ailintDir, "purplelint.yml");
 	if (!existsSync(indexPath)) {
-		ui.error(`ailint.yml not found in ${ailintDir}`);
+		ui.error(`purplelint.yml not found in ${ailintDir}`);
 		process.exit(1);
 	}
 
@@ -30,24 +30,24 @@ export async function runValidate(options: ValidateOptions) {
 	let warnings = 0;
 	let errors = 0;
 
-	// Validate ailint.yml
+	// Validate purplelint.yml
 	try {
 		const config = parseConfig(indexPath);
 		const configErrors = validateConfig(config);
 
 		if (configErrors.length === 0) {
-			ui.success("ailint.yml — valid");
+			ui.success("purplelint.yml — valid");
 			valid++;
 		} else {
 			const hasErrors = configErrors.some((e) => !e.message.startsWith("missing optional"));
 			if (hasErrors) {
-				ui.error(`ailint.yml — invalid`);
+				ui.error(`purplelint.yml — invalid`);
 				for (const err of configErrors) {
 					ui.log(`  └─ ${err.message}`);
 				}
 				errors++;
 			} else {
-				ui.warn("ailint.yml — warning");
+				ui.warn("purplelint.yml — warning");
 				for (const err of configErrors) {
 					ui.log(`  └─ ${err.message}`);
 				}
@@ -95,7 +95,7 @@ export async function runValidate(options: ValidateOptions) {
 			}
 		}
 	} catch (e) {
-		ui.error(`Failed to parse ailint.yml: ${e instanceof Error ? e.message : String(e)}`);
+		ui.error(`Failed to parse purplelint.yml: ${e instanceof Error ? e.message : String(e)}`);
 		process.exit(1);
 	}
 
@@ -108,13 +108,13 @@ export async function runValidate(options: ValidateOptions) {
 
 function findAilintDir(): string {
 	const candidates = [
-		join(process.cwd(), "ailint"),
-		join(process.cwd(), ".ailint"),
+		join(process.cwd(), "purplelint"),
+		join(process.cwd(), ".purplelint"),
 	];
 
 	for (const dir of candidates) {
 		if (existsSync(dir)) return dir;
 	}
 
-	return join(process.cwd(), "ailint");
+	return join(process.cwd(), "purplelint");
 }

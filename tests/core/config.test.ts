@@ -5,8 +5,8 @@ import { parseConfig, parseConfigFromString, validateConfig } from "../../src/co
 const FIXTURES = join(import.meta.dirname, "..", "fixtures");
 
 describe("parseConfig", () => {
-	it("parses a valid ailint.yml file", () => {
-		const config = parseConfig(join(FIXTURES, "single-repo", "ailint", "ailint.yml"));
+	it("parses a valid purplelint.yml file", () => {
+		const config = parseConfig(join(FIXTURES, "single-repo", "purplelint", "purplelint.yml"));
 		expect(config.version).toBe("0.1");
 		expect(config.purposes).toHaveLength(2);
 		expect(config.purposes[0].id).toBe("billing");
@@ -15,7 +15,7 @@ describe("parseConfig", () => {
 	});
 
 	it("parses global config options", () => {
-		const config = parseConfig(join(FIXTURES, "single-repo", "ailint", "ailint.yml"));
+		const config = parseConfig(join(FIXTURES, "single-repo", "purplelint", "purplelint.yml"));
 		expect(config.config?.context_strategy).toBe("diff+imports");
 		expect(config.config?.output_format).toBe("json");
 	});
@@ -43,7 +43,7 @@ purposes:
 
 describe("validateConfig", () => {
 	it("returns no errors for valid config", () => {
-		const config = parseConfig(join(FIXTURES, "single-repo", "ailint", "ailint.yml"));
+		const config = parseConfig(join(FIXTURES, "single-repo", "purplelint", "purplelint.yml"));
 		const errors = validateConfig(config);
 		expect(errors).toHaveLength(0);
 	});

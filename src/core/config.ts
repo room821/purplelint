@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
-import type { AilintConfig, AilintPurposeEntry } from "../types/config.js";
+import type { PurplelintConfig, PurplelintPurposeEntry } from "../types/config.js";
 
 export interface ValidationError {
 	field: string;
@@ -12,20 +12,20 @@ const VALID_OUTPUT_FORMATS = ["json", "markdown", "sarif"];
 const VALID_SEVERITIES = ["error", "warning", "info"];
 const VALID_CONFIDENCES = ["high", "medium", "low"];
 
-export function parseConfig(filePath: string): AilintConfig {
+export function parseConfig(filePath: string): PurplelintConfig {
 	const content = readFileSync(filePath, "utf-8");
 	return parseConfigFromString(content);
 }
 
-export function parseConfigFromString(content: string): AilintConfig {
+export function parseConfigFromString(content: string): PurplelintConfig {
 	const parsed = parseYaml(content);
 	if (!parsed || typeof parsed !== "object") {
 		throw new Error("Invalid YAML: expected an object");
 	}
-	return parsed as AilintConfig;
+	return parsed as PurplelintConfig;
 }
 
-export function validateConfig(config: AilintConfig): ValidationError[] {
+export function validateConfig(config: PurplelintConfig): ValidationError[] {
 	const errors: ValidationError[] = [];
 
 	if (!config.version) {
@@ -77,7 +77,7 @@ export function validateConfig(config: AilintConfig): ValidationError[] {
 	return errors;
 }
 
-function validatePurposeEntry(entry: AilintPurposeEntry, prefix: string): ValidationError[] {
+function validatePurposeEntry(entry: PurplelintPurposeEntry, prefix: string): ValidationError[] {
 	const errors: ValidationError[] = [];
 
 	if (!entry.id) {

@@ -1,10 +1,10 @@
 import type { Severity } from "../types/config.js";
-import type { AilintRunResult, PurposeResult } from "../types/result.js";
+import type { PurplelintRunResult, PurposeResult } from "../types/result.js";
 
 /**
  * Creates a new empty run result.
  */
-export function createRunResult(): AilintRunResult {
+export function createRunResult(): PurplelintRunResult {
 	return {
 		version: "0.1",
 		timestamp: new Date().toISOString(),
@@ -15,16 +15,16 @@ export function createRunResult(): AilintRunResult {
 /**
  * Formats the run result as JSON string.
  */
-export function formatResultJson(result: AilintRunResult): string {
+export function formatResultJson(result: PurplelintRunResult): string {
 	return JSON.stringify(result, null, 2);
 }
 
 /**
  * Formats the run result as markdown.
  */
-export function formatResultMarkdown(result: AilintRunResult): string {
+export function formatResultMarkdown(result: PurplelintRunResult): string {
 	const lines: string[] = [];
-	lines.push("# ailint Results");
+	lines.push("# purplelint Results");
 	lines.push("");
 	lines.push(`**Time:** ${result.timestamp}`);
 	lines.push("");
@@ -75,6 +75,6 @@ function severityIcon(severity: Severity): string {
 /**
  * Checks if any results have error-level violations.
  */
-export function hasErrorViolations(result: AilintRunResult): boolean {
+export function hasErrorViolations(result: PurplelintRunResult): boolean {
 	return result.results.some((r) => r.violation && r.severity === "error");
 }

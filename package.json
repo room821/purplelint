@@ -1,10 +1,10 @@
 {
-  "name": "ailint",
-  "version": "0.1.0",
+  "name": "purplelint",
+  "version": "0.2.0",
   "description": "Purpose-driven architecture linting protocol. Agent-agnostic. Open spec.",
   "type": "module",
   "bin": {
-    "ailint": "./dist/cli/index.js"
+    "purplelint": "./dist/cli/index.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

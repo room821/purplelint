@@ -10,7 +10,7 @@ export interface PurposeResult {
 	suggestion: string | null;
 }
 
-export interface AilintRunResult {
+export interface PurplelintRunResult {
 	version: string;
 	timestamp: string;
 	results: PurposeResult[];
