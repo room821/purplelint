@@ -506,62 +506,7 @@ const DETECTORS: Detector[] = [
 		},
 	},
 
-	// 4. External AI / LLM APIs
-	{
-		name: "ai-api",
-		category: "ai",
-		detect(ctx) {
-			const openai = hasDependency(ctx, "openai");
-			const anthropic = hasDependency(ctx, "@anthropic-ai/sdk");
-			const google = hasDependency(ctx, "@google/generative-ai");
-			const sdk = openai || anthropic || google;
-
-			const evidence = searchFiles(ctx, [
-				"openai",
-				"anthropic",
-				"api.openai.com",
-				"api.anthropic.com",
-				"generativelanguage.googleapis.com",
-				"chat.completions",
-				"messages.create",
-			]);
-
-			if (!sdk && evidence.length < 2) return null;
-
-			// Find AI wrapper file
-			const aiFiles = hasFiles(ctx, ["ai", "llm", "completion", "chat"]);
-			const gatewayFile = pickGateway(aiFiles, "your AI client module");
-
-			return {
-				category: "ai",
-				label: sdk ? `${sdk} detected` : "AI API calls detected",
-				evidence: evidence.slice(0, 5),
-				purposeData: {
-					id: "ai-gateway",
-					purpose: `All AI/LLM API calls must go through the designated AI client (${gatewayFile}). Direct SDK calls bypass usage tracking, cost monitoring, rate limiting, and fallback logic, causing uncontrolled spend and outage risk.`,
-					violations: [
-						`Direct ${sdk || "AI SDK"} API calls outside the designated client`,
-						"Custom wrappers that bypass the official AI client",
-						"AI API calls without usage tracking metadata (userId, feature, model)",
-						"Hardcoded API keys instead of using the client's key management",
-					],
-					good_example: {
-						title: "Through AI client",
-						code: `import { completion } from "${gatewayFile}";\nconst result = await completion({\n  model: "gpt-4",\n  prompt,\n  metadata: { userId, feature: "chat" }\n});`,
-					},
-					bad_example: {
-						title: "Direct SDK call",
-						code: `import OpenAI from "openai";\nconst client = new OpenAI({ apiKey });\nawait client.chat.completions.create({ model: "gpt-4", messages });\n// No tracking, no rate limiting, no fallback`,
-					},
-					context_hint: `Trace all imports of ${sdk || "AI SDKs"}. Every AI call must route through ${gatewayFile}. Watch for new utility files that import AI SDKs directly.`,
-					scope: langGlob(ctx),
-					severity: "error",
-				},
-			};
-		},
-	},
-
-	// 5. Layer Structure (Clean Architecture / DDD)
+	// 4. Layer Structure (Clean Architecture / DDD)
 	{
 		name: "layer-structure",
 		category: "architecture",

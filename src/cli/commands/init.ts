@@ -59,17 +59,7 @@ export async function runInit(options: InitOptions) {
 		return;
 	}
 
-	// Phase 2: Show discoveries
-	ui.log("");
-	for (const result of scanResults) {
-		ui.log(`  [${result.category}] ${result.label}`);
-		for (const ev of result.evidence.slice(0, 3)) {
-			ui.log(`    ${ev.file}${ev.line ? `:${ev.line}` : ""} — ${ev.snippet.slice(0, 80)}`);
-		}
-		ui.log("");
-	}
-
-	// Phase 3: Let user confirm which to include
+	// Phase 2: Let user confirm which to include
 	let selectedResults: ScanResult[];
 
 	if (options.yes) {
