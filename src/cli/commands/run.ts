@@ -9,6 +9,7 @@ import { createRunResult, formatResultJson, formatResultMarkdown } from "../../c
 import { filterByScope } from "../../core/scope.js";
 import type { ContextStrategy } from "../../types/config.js";
 import * as ui from "../ui.js";
+import { cleanExpired, isSkipped, loadSkips, saveSkips } from "./skip.js";
 
 export interface RunOptions {
 	purpose?: string;
@@ -67,6 +68,23 @@ export async function runRun(options: RunOptions) {
 		});
 
 		selectedIds = await ui.selectPurposes(purposes);
+	}
+
+	// Filter out skipped purposes
+	const skips = cleanExpired(loadSkips(ailintDir));
+	saveSkips(ailintDir, skips);
+
+	const skippedIds = selectedIds.filter((id) => isSkipped(skips, id));
+	if (skippedIds.length > 0) {
+		ui.log(`Skipped (temporary): ${skippedIds.join(", ")}`);
+	}
+	selectedIds = selectedIds.filter((id) => !isSkipped(skips, id));
+
+	if (selectedIds.length === 0) {
+		ui.warn("All selected purposes are currently skipped.");
+		ui.log('Use "purplelint skip --clear" to remove skips.');
+		ui.outro("Nothing to check");
+		return;
 	}
 
 	// Get changed files

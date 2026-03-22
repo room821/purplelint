@@ -15,6 +15,7 @@ const HELP = `
     validate    Validate purpose files against schema
     run         Run architecture checks
     list        List configured purposes
+    skip        Skip a purpose for N days
 
   Options:
     --help, -h  Show this help message
@@ -26,6 +27,8 @@ const HELP = `
     npx purplelint run -i
     npx purplelint run --purpose billing
     npx purplelint list
+    npx purplelint skip billing-tracking 7
+    npx purplelint skip --clear
 `;
 
 async function main() {
@@ -38,7 +41,7 @@ async function main() {
 	}
 
 	if (command === "--version") {
-		console.log("purplelint 0.4.0");
+		console.log("purplelint 0.5.0");
 		process.exit(0);
 	}
 
@@ -110,6 +113,26 @@ async function main() {
 				strict: false,
 			});
 			await runList({ dir: values.dir as string | undefined });
+			break;
+		}
+
+		case "skip": {
+			const { values, positionals } = parseArgs({
+				args: commandArgs,
+				options: {
+					dir: { type: "string" },
+					clear: { type: "boolean" },
+				},
+				strict: false,
+				allowPositionals: true,
+			});
+			const { runSkip } = await import("./commands/skip.js");
+			await runSkip({
+				purposeId: positionals[0],
+				days: positionals[1],
+				dir: values.dir as string | undefined,
+				clear: values.clear as boolean | undefined,
+			});
 			break;
 		}
 

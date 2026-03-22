@@ -12,6 +12,20 @@
 
 ---
 
+## Install
+
+```bash
+npm install -D purplelint
+```
+
+Or run directly:
+
+```bash
+npx purplelint init
+```
+
+---
+
 ESLint catches semicolons. ArchUnit catches import direction.
 
 **purplelint catches "this code will lose us money."**
@@ -350,4 +364,13 @@ npm run build
 
 ---
 
-If purplelint saves your team from a sequence bug, [star it on GitHub](https://github.com/room821/purplelint).
+<p align="center">
+  <a href="https://github.com/room821/purplelint">
+    <img src="https://img.shields.io/github/stars/room821/purplelint?style=social" alt="GitHub stars">
+  </a>
+</p>
+
+<p align="center">
+  If purplelint saves your team from a sequence bug,<br>
+  <a href="https://github.com/room821/purplelint"><strong>give it a star</strong></a>
+</p>

@@ -1081,4 +1081,214 @@ const DETECTORS: Detector[] = [
 			};
 		},
 	},
+	// 12. OAuth Flow Safety
+	{
+		name: "oauth-flow",
+		category: "auth",
+		detect(ctx) {
+			const oauth = hasDependency(
+				ctx,
+				"passport",
+				"next-auth",
+				"@auth/core",
+				"grant",
+				"oauth",
+				"oauthlib",
+				"authlib",
+				"social-auth-app-django",
+				"omniauth",
+			);
+
+			const evidence = searchFiles(ctx, [
+				"OAuth",
+				"oauth",
+				"authorization_code",
+				"access_token",
+				"refresh_token",
+				"redirect_uri",
+				"callback",
+				"PKCE",
+				"code_verifier",
+				"state=",
+			]);
+
+			if (!oauth && evidence.length < 3) return null;
+
+			return {
+				category: "auth",
+				label: `OAuth flow detected${oauth ? ` (${oauth})` : ""}`,
+				evidence: evidence.slice(0, 5),
+				purposeData: {
+					id: "oauth-flow",
+					purpose:
+						"OAuth flows must follow a strict sequence: redirect with state+PKCE → receive callback → verify state → exchange code → validate token → create session. Skipping state verification enables CSRF. Skipping PKCE enables code interception. Storing tokens client-side enables theft.",
+					violations: [
+						"SEQUENCE BREAK: Authorization code exchanged without verifying state parameter (CSRF vulnerability)",
+						"SEQUENCE BREAK: Token used before validating issuer/audience claims",
+						"MISSING STEP: No PKCE (code_verifier/code_challenge) in authorization request — code interception attack",
+						"MISSING STEP: No state parameter in authorization URL — CSRF attack vector",
+						"MISSING STEP: Redirect URI not validated against whitelist — open redirect",
+						"BOUNDARY: Access/refresh tokens stored in localStorage or cookies without httpOnly+secure flags",
+						"BOUNDARY: Token exchange happening client-side (browser) instead of server-side — secrets exposed",
+						"LEAK: Client secret included in frontend/mobile code",
+					],
+					good_example: {
+						title: "Correct sequence: OAuth authorization code flow",
+						code: "// Step 1: REDIRECT with state + PKCE\nconst state = crypto.randomUUID();\nconst codeVerifier = generateCodeVerifier();\nconst codeChallenge = generateCodeChallenge(codeVerifier);\nsession.oauthState = state;\nsession.codeVerifier = codeVerifier;\nres.redirect(`${authUrl}?state=${state}&code_challenge=${codeChallenge}`);\n\n// Step 2: CALLBACK — verify state FIRST\nif (req.query.state !== session.oauthState) throw new Error('Invalid state');\n\n// Step 3: EXCHANGE code server-side\nconst tokens = await exchangeCode(req.query.code, session.codeVerifier);\n\n// Step 4: VALIDATE token claims\nconst claims = jwt.verify(tokens.id_token, publicKey);\nif (claims.aud !== CLIENT_ID) throw new Error('Invalid audience');",
+					},
+					bad_example: {
+						title: "Broken sequence: no state check, client-side exchange",
+						code: "// No state parameter — CSRF!\nres.redirect(`${authUrl}?redirect_uri=${callbackUrl}`);\n\n// Callback — no state verification\nconst code = req.query.code;\n// Token exchange in browser JS — client_secret exposed!\nfetch('/token', { body: { code, client_secret: 'sk_...' } });",
+					},
+					context_hint:
+						"Trace the OAuth flow: 1→generate state+PKCE, 2→redirect, 3→callback verifies state, 4→server-side code exchange, 5→validate token claims. Flag missing state params, missing PKCE, client-side token exchange, and tokens in localStorage.",
+					scope: langGlob(ctx),
+					severity: "error",
+				},
+			};
+		},
+	},
+	// 13. Cache Safety
+	{
+		name: "cache-safety",
+		category: "performance",
+		detect(ctx) {
+			const redis = hasDependency(
+				ctx,
+				"redis",
+				"ioredis",
+				"@upstash/redis",
+				"redis-py",
+				"django-redis",
+				"celery",
+			);
+			const memcache = hasDependency(ctx, "memcached", "memjs", "pylibmc", "pymemcache");
+			const cacheLib = redis || memcache;
+
+			const evidence = searchFiles(ctx, [
+				"cache.get",
+				"cache.set",
+				"cache.del",
+				"redis.get",
+				"redis.set",
+				"getFromCache",
+				"setCache",
+				"invalidate",
+				"Cache-Control",
+				"stale-while-revalidate",
+				"@Cacheable",
+				"lru_cache",
+			]);
+
+			if (!cacheLib && evidence.length < 3) return null;
+
+			return {
+				category: "performance",
+				label: `Cache layer detected${cacheLib ? ` (${cacheLib})` : ""}`,
+				evidence: evidence.slice(0, 5),
+				purposeData: {
+					id: "cache-safety",
+					purpose:
+						"Cache operations must follow: check cache → miss? fetch source → validate → store with TTL → return. Invalidation must be explicit on write. Serving stale data after mutation, caching without TTL, and cache stampede on cold start are the top 3 cache-related incidents.",
+					violations: [
+						"SEQUENCE BREAK: Data mutated but cache not invalidated — stale reads persist",
+						"SEQUENCE BREAK: Cache populated before source-of-truth confirmed (caching error responses or partial data)",
+						"MISSING STEP: Cache set without TTL/expiry — stale data served indefinitely",
+						"MISSING STEP: No cache stampede protection (mutex/lock/singleflight) on expensive queries",
+						"MISSING STEP: No serialization format versioning — old cached shape breaks new code after deploy",
+						"BOUNDARY: User-specific data cached with shared key — data leaks between users",
+						"BOUNDARY: Cache key includes no version/namespace — deploy causes shape mismatch errors",
+						"LEAK: Sensitive data (tokens, PII, payment details) cached without encryption or proper access control",
+					],
+					good_example: {
+						title: "Correct sequence: cache-aside with TTL + invalidation",
+						code: "// Step 1: CHECK cache\nconst cached = await redis.get(`user:${userId}:profile`);\nif (cached) return JSON.parse(cached);\n\n// Step 2: FETCH from source\nconst profile = await db.user.findUnique({ where: { id: userId } });\n\n// Step 3: STORE with TTL\nawait redis.set(`user:${userId}:profile`, JSON.stringify(profile), 'EX', 3600);\n\n// On WRITE — invalidate immediately\nasync function updateProfile(userId, data) {\n  await db.user.update({ where: { id: userId }, data });\n  await redis.del(`user:${userId}:profile`); // invalidate\n}",
+					},
+					bad_example: {
+						title: "Broken: no TTL, no invalidation, shared key",
+						code: "// No TTL — cached forever\nawait redis.set('user-profile', JSON.stringify(profile));\n\n// Update DB but forget to invalidate cache\nawait db.user.update({ data: newData });\n// cache still returns old data!\n\n// Shared key for different users — data leak\nawait redis.set('current-user', JSON.stringify(userData));",
+					},
+					context_hint:
+						"Trace cache read/write pairs: every cache.set must have a TTL. Every DB write that affects cached data must invalidate the cache. Check cache keys for user-specificity (no shared keys for user data). Look for cache.set without corresponding invalidation on mutations.",
+					scope: langGlob(ctx),
+					severity: "warning",
+				},
+			};
+		},
+	},
+	// 14. Data Integrity / Duplication
+	{
+		name: "data-integrity",
+		category: "database",
+		detect(ctx) {
+			const orm = hasDependency(
+				ctx,
+				"@prisma/client",
+				"typeorm",
+				"drizzle-orm",
+				"sequelize",
+				"mongoose",
+				"sqlalchemy",
+				"django",
+				"activerecord",
+			);
+
+			const evidence = searchFiles(ctx, [
+				"unique:",
+				"@@unique",
+				"@unique",
+				"UNIQUE",
+				"findOrCreate",
+				"upsert",
+				"ON CONFLICT",
+				"insertOrUpdate",
+				"get_or_create",
+				"UniqueConstraint",
+				"duplicate key",
+			]);
+
+			const createEvidence = searchFiles(ctx, [
+				".create(",
+				".insert(",
+				".save(",
+				"INSERT INTO",
+				"bulk_create",
+				"createMany",
+			]);
+
+			if (!orm && evidence.length < 1 && createEvidence.length < 3) return null;
+
+			return {
+				category: "database",
+				label: `${orm || "Database"} write patterns detected`,
+				evidence: [...evidence, ...createEvidence].slice(0, 5),
+				purposeData: {
+					id: "data-integrity",
+					purpose:
+						"Write operations must enforce uniqueness at the DATABASE level, not application level. Race conditions between check-then-insert cause duplicates. Bulk imports without conflict handling corrupt data. Every user-facing create operation needs a unique constraint + upsert/ON CONFLICT strategy.",
+					violations: [
+						"RACE CONDITION: Check-then-insert pattern (findFirst → create) without unique constraint — concurrent requests create duplicates",
+						"MISSING STEP: create() without corresponding unique constraint on business key (email, slug, external_id)",
+						"MISSING STEP: Bulk import/sync without ON CONFLICT or upsert — duplicates on retry",
+						"MISSING STEP: No idempotency key on user-facing create endpoints — double-click creates duplicates",
+						"BOUNDARY: Uniqueness enforced only in application code (if-exists check) instead of DB constraint",
+						"BOUNDARY: Soft-deleted records not excluded from unique constraints — can't re-create with same key",
+						"DATA LOSS: Update/upsert without optimistic locking (version column) — concurrent edits silently overwrite",
+					],
+					good_example: {
+						title: "DB-level uniqueness with upsert",
+						code: "// Schema: unique constraint at DB level\nmodel User {\n  email String @unique\n  externalId String @unique\n}\n\n// Upsert instead of check-then-insert\nawait db.user.upsert({\n  where: { externalId: provider.id },\n  create: { email, externalId: provider.id, name },\n  update: { name, lastLogin: new Date() },\n});\n\n// Bulk with conflict handling\nawait db.$executeRaw`\n  INSERT INTO events (external_id, data)\n  VALUES ${values}\n  ON CONFLICT (external_id) DO UPDATE SET data = EXCLUDED.data`;",
+					},
+					bad_example: {
+						title: "Application-level check creates race condition",
+						code: "// Check-then-insert — RACE CONDITION\nconst existing = await db.user.findUnique({ where: { email } });\nif (!existing) {\n  await db.user.create({ data: { email, name } });\n  // Two concurrent requests both pass the check → duplicate!\n}\n\n// Bulk import — no conflict handling\nfor (const item of importData) {\n  await db.item.create({ data: item }); // fails or duplicates on retry\n}",
+					},
+					context_hint:
+						"Search for create/insert operations. Each one should have a corresponding unique constraint or use upsert/ON CONFLICT. Flag findFirst→create patterns (check-then-insert race condition). Check bulk imports for conflict handling. Verify business keys (email, slug, external_id) have DB-level unique constraints.",
+					scope: langGlob(ctx),
+					severity: "error",
+				},
+			};
+		},
+	},
 ];
