@@ -361,28 +361,44 @@ const DETECTORS: Detector[] = [
 			const paymentFiles = hasFiles(ctx, ["payment", "billing", "stripe", "checkout"]);
 			const gatewayFile = pickGateway(paymentFiles, "your payment service");
 
+			// Check for webhook handling patterns
+			const webhookEvidence = searchFiles(ctx, [
+				"webhooks.constructEvent",
+				"webhook_construct_event",
+				"verify_webhook",
+				"verifyWebhookSignature",
+				"webhookSecret",
+				"idempotencyKey",
+				"idempotency_key",
+			]);
+
+			const hasWebhook = webhookEvidence.length > 0;
+
 			return {
 				category: "billing",
-				label: `${sdk} detected`,
-				evidence: evidence.slice(0, 5),
+				label: `${sdk} detected${hasWebhook ? " + webhooks" : ""}`,
+				evidence: [...evidence, ...webhookEvidence].slice(0, 5),
 				purposeData: {
 					id: "billing-tracking",
-					purpose: `All ${sdk} operations must go through the designated payment service (${gatewayFile}). Direct SDK calls bypass billing tracking, audit logging, and error handling, causing revenue leakage and compliance gaps.`,
+					purpose: `All ${sdk} operations must go through the designated payment service (${gatewayFile}). Webhook handlers must verify signatures, store events before processing, and use idempotency keys. Direct SDK calls bypass billing tracking, audit logging, and error handling, causing revenue leakage and compliance gaps.`,
 					violations: [
 						`Direct ${sdk} API calls outside the payment service`,
-						"Payment operations without userId or tracking metadata",
-						"Custom wrappers that bypass the designated payment service",
-						"Charges or refunds without audit trail logging",
+						"Webhook handler without signature verification (constructEvent / verify_webhook_signature)",
+						"Webhook processing before persisting the raw event (process-then-store instead of store-then-process)",
+						"Payment mutations without idempotency keys — retries cause double charges",
+						"Trusting client-side amounts or prices instead of server-side lookup",
+						"Charges or refunds without audit trail logging (userId, requestId, timestamp)",
+						"Missing webhook event deduplication — same event processed twice",
 					],
 					good_example: {
-						title: "Through payment service",
-						code: `import { paymentService } from "${gatewayFile}";\nawait paymentService.charge({\n  amount,\n  userId,\n  metadata: { source: "checkout" }\n});`,
+						title: "Safe webhook + payment flow",
+						code: `// 1. Verify signature\nconst event = stripe.webhooks.constructEvent(body, sig, webhookSecret);\n// 2. Store raw event FIRST\nawait db.webhookEvent.create({ data: { eventId: event.id, payload: body } });\n// 3. Process idempotently\nif (await isProcessed(event.id)) return;\nawait paymentService.fulfill(event, { idempotencyKey: event.id });`,
 					},
 					bad_example: {
-						title: "Direct SDK call",
-						code: `import Stripe from "${sdk}";\nconst stripe = new Stripe(key);\nawait stripe.charges.create({ amount, currency: "usd" });\n// Bypasses tracking, audit, error handling`,
+						title: "Unsafe webhook handler",
+						code: `// No signature check!\nconst event = JSON.parse(req.body);\n// Process without storing — if this crashes, event is lost\nawait updateSubscription(event.data);\n// No idempotency — webhook retry = double update`,
 					},
-					context_hint: `Trace all ${sdk} import chains. Every call must route through ${gatewayFile}. Watch for new files that import ${sdk} directly.`,
+					context_hint: `Check webhook handlers for: 1) signature verification, 2) raw event persistence before processing, 3) idempotency key or deduplication check. Check payment calls for: idempotencyKey param, server-side price lookup, audit metadata.`,
 					scope: langGlob(ctx),
 					severity: "error",
 				},
@@ -413,28 +429,41 @@ const DETECTORS: Detector[] = [
 			const middlewareFiles = hasFiles(ctx, ["middleware", "auth", "guard"]);
 			const authFile = pickGateway(middlewareFiles, "middleware/auth");
 
+			// Check for rate limiting
+			const rateLimitEvidence = searchFiles(ctx, [
+				"rateLimit",
+				"rate_limit",
+				"throttle",
+				"express-rate-limit",
+				"slowDown",
+			]);
+
 			return {
 				category: "auth",
 				label: jwt ? `${jwt} auth detected` : "Auth patterns detected",
 				evidence: evidence.slice(0, 5),
 				purposeData: {
 					id: "auth-boundary",
-					purpose: `Authentication and authorization must be handled exclusively in the designated auth layer (${authFile}). Token verification, session validation, and permission checks scattered across handlers and services create bypassable security gaps.`,
+					purpose: `Authentication and authorization must be handled exclusively in the designated auth layer (${authFile}). Token expiry must be validated, refresh tokens must be rotated, and auth endpoints must be rate-limited. Scattered auth logic creates bypassable security gaps.`,
 					violations: [
 						"Token parsing/verification outside the auth middleware",
 						"Direct access to req.headers.authorization in handlers or services",
-						"Role/permission checks duplicated across service methods",
-						"Route handlers without auth middleware that require authentication",
+						"Missing token expiry validation — expired tokens accepted",
+						"Refresh tokens reused without rotation — stolen token works forever",
+						"Auth endpoints (login, register, reset) without rate limiting",
+						"Role/permission checks duplicated across service methods instead of middleware",
+						"Secrets or JWT keys hardcoded instead of from environment variables",
+						"Error messages revealing whether email/username exists (user enumeration)",
 					],
 					good_example: {
-						title: "Auth in middleware, handler uses result",
-						code: `// ${authFile} handles auth\napp.use("/api", authMiddleware);\n\n// Handler — auth already verified\napp.get("/api/data", (req, res) => {\n  const data = await service.get(req.user.id);\n  res.json(data);\n});`,
+						title: "Auth in middleware with expiry + rate limit",
+						code: `// ${authFile}\nconst decoded = jwt.verify(token, process.env.JWT_SECRET);\nif (decoded.exp < Date.now() / 1000) throw new TokenExpiredError();\n\n// Rate limit on auth routes\napp.use("/auth", rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }));\n\n// Handler — auth already verified\napp.get("/api/data", authMiddleware, handler);`,
 					},
 					bad_example: {
-						title: "Auth in handler",
-						code: `app.get("/api/data", (req, res) => {\n  const token = req.headers.authorization?.split(" ")[1];\n  const user = jwt.verify(token, SECRET);\n  // Auth logic leaked into handler\n});`,
+						title: "Auth in handler, no expiry check",
+						code: `app.get("/api/data", (req, res) => {\n  const token = req.headers.authorization?.split(" ")[1];\n  const user = jwt.decode(token); // decode, not verify!\n  // No expiry check, no rate limit, leaked into handler\n});`,
 					},
-					context_hint: `Search for jwt, token, verify, decode, authorization keywords used outside ${authFile}. Also check for role/permission string comparisons in service files.`,
+					context_hint: `Check for: 1) jwt.decode used without verify (accepts unsigned tokens), 2) missing exp/iat validation, 3) refresh token endpoint without rotation, 4) auth routes without rate limiting, 5) hardcoded secrets. Search outside ${authFile} for jwt/token/authorization usage.`,
 					scope: langGlob(ctx),
 					severity: "error",
 				},
@@ -483,22 +512,25 @@ const DETECTORS: Detector[] = [
 				evidence: evidence.slice(0, 5),
 				purposeData: {
 					id: "transaction-safety",
-					purpose: `Read-modify-write operations on shared state (balances, counters, inventory, quotas) must be wrapped in database transactions. Without transactions, concurrent requests corrupt data integrity.`,
+					purpose: `Read-modify-write operations on shared state must be wrapped in database transactions with proper isolation. Unbounded queries must have pagination. Deletions should be soft-delete unless explicitly justified. Without these, concurrent requests corrupt data and careless queries take down the DB.`,
 					violations: [
 						"DB read followed by DB write on same record without transaction wrapping",
-						"Balance/counter/inventory updates without optimistic locking or transactions",
-						"Multiple sequential writes that should be atomic (e.g., order + inventory)",
-						"Shared state mutation without concurrency protection",
+						"Balance/counter/inventory updates without optimistic locking (version/updatedAt check) or transactions",
+						"Multiple sequential writes that should be atomic (e.g., order + inventory deduction)",
+						`findMany/find without limit or pagination — unbounded queries on growing tables`,
+						"Hard delete (DELETE/destroy) on user-facing data instead of soft delete (deletedAt flag)",
+						"Raw SQL with string interpolation instead of parameterized queries (SQL injection risk)",
+						"Missing unique constraint or upsert for operations that should be idempotent",
 					],
 					good_example: {
-						title: "Transaction-wrapped update",
-						code: `await ${txMethod}(async (tx) => {\n  const account = await tx.account.findUnique({ where: { id } });\n  if (account.balance < amount) throw new InsufficientBalanceError();\n  await tx.account.update({ where: { id }, data: { balance: account.balance - amount } });\n});`,
+						title: "Transaction + optimistic lock + pagination",
+						code: `await ${txMethod}(async (tx) => {\n  const account = await tx.account.findUnique({ where: { id } });\n  if (account.version !== expectedVersion) throw new ConflictError();\n  await tx.account.update({\n    where: { id, version: expectedVersion },\n    data: { balance: account.balance - amount, version: { increment: 1 } }\n  });\n});\n\n// Paginated query\nawait db.user.findMany({ take: 20, skip: page * 20, orderBy: { createdAt: "desc" } });`,
 					},
 					bad_example: {
-						title: "Unprotected read-modify-write",
-						code: `const account = await db.account.findUnique({ where: { id } });\n// Another request can modify balance here!\nawait db.account.update({ where: { id }, data: { balance: account.balance - amount } });`,
+						title: "Unprotected + unbounded + hard delete",
+						code: `const account = await db.account.findUnique({ where: { id } });\nawait db.account.update({ data: { balance: account.balance - amount } });\n// No transaction, no version check\n\nconst allUsers = await db.user.findMany(); // unbounded!\nawait db.user.delete({ where: { id } }); // hard delete, data gone forever`,
 					},
-					context_hint: `Look for patterns where a DB read (find, findUnique, findOne, get) and a DB write (update, save, create) operate on the same record in the same function without ${txMethod}. Pay special attention to balance, stock, counter, quota values.`,
+					context_hint: `Check for: 1) read-then-write without ${txMethod}, 2) findMany/find without take/limit, 3) .delete()/.destroy() without soft-delete pattern, 4) string concatenation in SQL queries, 5) missing version/updatedAt checks on concurrent-write-prone tables.`,
 					scope: langGlob(ctx),
 					severity: "error",
 				},
@@ -613,22 +645,26 @@ const DETECTORS: Detector[] = [
 				evidence: weakEvidence.slice(0, 5),
 				purposeData: {
 					id: "test-integrity",
-					purpose: `Tests must validate actual business behavior, not just existence. Superficial tests with weak assertions (toBeDefined, toBeTruthy), implementation-coupled tests (mock call order), and broad error catches create false confidence and miss real bugs.`,
+					purpose: `Tests must validate actual business behavior, not just existence. Every test should answer: "what breaks if this code is wrong?" If the answer is "nothing", the test is useless. Mocking should be minimal — mock boundaries (APIs, DB), not internal logic.`,
 					violations: [
-						"Tests with no assertions or only trivial assertions (toBeDefined, toBeTruthy)",
+						"Tests with no assertions or only trivial assertions (toBeDefined, toBeTruthy, assertIsNotNone)",
 						"Tests verifying mock call order instead of business outcomes",
-						"Overly broad error catches (.toThrow() without specific error type)",
+						"Overly broad error catches (.toThrow() / pytest.raises(Exception)) without specific error type",
 						"Test descriptions that don't match what's actually tested",
+						"Mocking internal functions instead of external boundaries — tests pass but production breaks",
+						"Tests that pass even when the implementation is commented out (no real coverage)",
+						"Snapshot tests on large objects that get auto-updated without review",
+						"Missing edge cases: empty input, null, boundary values, concurrent access",
 					],
 					good_example: {
-						title: "Behavior-focused test",
-						code: `test("insufficient balance rejects withdrawal", async () => {\n  const account = new Account({ balance: 100 });\n  await expect(account.withdraw(200))\n    .rejects.toThrow(InsufficientBalanceError);\n  expect(account.balance).toBe(100);\n});`,
+						title: "Behavior-focused test with edge case",
+						code: `test("insufficient balance rejects withdrawal and preserves balance", async () => {\n  const account = new Account({ balance: 100 });\n  await expect(account.withdraw(200))\n    .rejects.toThrow(InsufficientBalanceError);\n  expect(account.balance).toBe(100); // balance unchanged\n});\n\ntest("zero amount withdrawal throws InvalidAmountError", async () => {\n  await expect(account.withdraw(0)).rejects.toThrow(InvalidAmountError);\n});`,
 					},
 					bad_example: {
-						title: "Trivial assertion",
-						code: `test("creates user", async () => {\n  const user = await userService.create({ name: "test" });\n  expect(user).toBeDefined(); // tells nothing\n});`,
+						title: "Trivial test with internal mocking",
+						code: `test("creates user", async () => {\n  jest.spyOn(repo, "save").mockResolvedValue({ id: 1 });\n  const user = await userService.create({ name: "test" });\n  expect(user).toBeDefined(); // tells nothing\n  expect(repo.save).toHaveBeenCalledTimes(1); // tests mock, not behavior\n});`,
 					},
-					context_hint: "Check if expect/assert statements validate meaningful business outcomes. Flag toBeDefined(), toBeTruthy() as sole assertions. Flag .toThrow() without a specific error class.",
+					context_hint: "Check: 1) sole assertions being toBeDefined/toBeTruthy, 2) jest.spyOn on internal modules instead of external APIs, 3) .toThrow() without error class, 4) test names vs actual assertions mismatch, 5) missing edge case tests for new business logic.",
 					scope: ctx.primaryLang === "py" ? "**/test_*.py" : "**/*.{test,spec}.{ts,js,tsx,jsx}",
 					severity: "warning",
 				},
