@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import * as p from "@clack/prompts";
@@ -148,12 +149,56 @@ export async function runInit(options: InitOptions) {
 	ui.log("   npx purplelint skip <id> <d>   Skip a purpose for N days");
 	ui.log("   npx purplelint list            Show configured purposes");
 
-	// Agent integration
-	ui.log("");
-	ui.log("Plug into your AI agent:");
-	ui.log("   npx purplelint run --all --output prompt | claude");
-	ui.log("   npx purplelint run --all --output prompt | codex");
-	ui.log('   Add to .cursorrules: "Read /purplelint and check changes against each purpose."');
+	// Detect available AI agents
+	const agents = detectAgents();
+
+	if (agents.length > 0) {
+		ui.log("");
+		ui.log(`Detected: ${agents.map((a) => a.name).join(", ")}`);
+
+		const tryNow = await p.confirm({
+			message: `Run a quick architecture check with ${agents[0].name}?`,
+			initialValue: true,
+		});
+
+		if (!p.isCancel(tryNow) && tryNow) {
+			ui.log("");
+			ui.log(`Running: npx purplelint run --all --output prompt | ${agents[0].cmd}`);
+			ui.log("");
+
+			const result = spawnSync(
+				"npx",
+				["purplelint", "run", "--all", "--output", "prompt", "--dir", ailintDir],
+				{ cwd: process.cwd(), encoding: "utf-8", timeout: 30000 },
+			);
+
+			if (result.stdout) {
+				const child = spawnSync(agents[0].cmd, [], {
+					input: result.stdout,
+					encoding: "utf-8",
+					stdio: ["pipe", "inherit", "inherit"],
+					timeout: 120000,
+				});
+
+				if (child.error) {
+					ui.warn(`Could not pipe to ${agents[0].cmd}: ${child.error.message}`);
+					ui.log("You can run it manually:");
+					ui.log(`   npx purplelint run --all --output prompt | ${agents[0].cmd}`);
+				}
+			} else {
+				ui.warn("No output generated (no changed files?)");
+				ui.log("Try after making some changes:");
+				ui.log(`   npx purplelint run --all --output prompt | ${agents[0].cmd}`);
+			}
+		}
+	} else {
+		// No agent found — show manual instructions
+		ui.log("");
+		ui.log("Plug into your AI agent:");
+		ui.log("   npx purplelint run --all --output prompt | claude");
+		ui.log("   npx purplelint run --all --output prompt | codex");
+		ui.log('   Add to .cursorrules: "Read /purplelint and check changes against each purpose."');
+	}
 
 	// CI hint
 	ui.log("");
@@ -164,4 +209,25 @@ export async function runInit(options: InitOptions) {
 
 	// Star prompt — one-time, only if gh CLI is available
 	await maybePromptGithubStar();
+}
+
+interface AgentInfo {
+	name: string;
+	cmd: string;
+}
+
+function detectAgents(): AgentInfo[] {
+	const candidates: AgentInfo[] = [
+		{ name: "Claude", cmd: "claude" },
+		{ name: "Codex", cmd: "codex" },
+	];
+
+	return candidates.filter((a) => {
+		const result = spawnSync("which", [a.cmd], {
+			encoding: "utf-8",
+			stdio: ["ignore", "pipe", "ignore"],
+			timeout: 3000,
+		});
+		return !result.error && result.status === 0;
+	});
 }
