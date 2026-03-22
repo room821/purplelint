@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildPrompt } from "../../src/core/prompt-builder.js";
 import type { CodeContext } from "../../src/core/context.js";
+import { buildPrompt } from "../../src/core/prompt-builder.js";
 import type { Purpose } from "../../src/types/purpose.js";
 
 describe("buildPrompt", () => {
@@ -8,12 +8,8 @@ describe("buildPrompt", () => {
 		id: "billing",
 		purpose: "All AI calls must go through the SDK.",
 		violations: ["Direct API calls", "Custom wrappers"],
-		good_examples: [
-			{ title: "SDK call", code: 'import { completion } from "@org/sdk";' },
-		],
-		bad_examples: [
-			{ title: "Direct fetch", code: 'fetch("https://api.openai.com/...");' },
-		],
+		good_examples: [{ title: "SDK call", code: 'import { completion } from "@org/sdk";' }],
+		bad_examples: [{ title: "Direct fetch", code: 'fetch("https://api.openai.com/...");' }],
 		context_hint: "Check import chains.",
 		exceptions: ["Test files"],
 	};

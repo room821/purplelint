@@ -28,9 +28,7 @@ export async function selectPurposes(
 	return result as string[];
 }
 
-export async function selectPresets(
-	presets: { id: string; label: string }[],
-): Promise<string[]> {
+export async function selectPresets(presets: { id: string; label: string }[]): Promise<string[]> {
 	const result = await p.multiselect({
 		message: "Which presets would you like to add?",
 		options: [

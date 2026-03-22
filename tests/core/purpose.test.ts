@@ -59,8 +59,6 @@ describe("validatePurpose", () => {
 			good_examples: [{ title: "", code: "code" }],
 			bad_examples: [{ title: "b", code: "c" }],
 		});
-		expect(errors.some((e) => e.field.includes("good_examples") && e.level === "error")).toBe(
-			true,
-		);
+		expect(errors.some((e) => e.field.includes("good_examples") && e.level === "error")).toBe(true);
 	});
 });

@@ -17,11 +17,7 @@ describe("filterByScope", () => {
 	});
 
 	it("matches files with specific directory pattern", () => {
-		const files = [
-			"src/services/chat.ts",
-			"src/controllers/user.ts",
-			"src/index.ts",
-		];
+		const files = ["src/services/chat.ts", "src/controllers/user.ts", "src/index.ts"];
 		const result = filterByScope(files, "src/services/**/*.ts");
 		expect(result).toContain("src/services/chat.ts");
 		expect(result).not.toContain("src/controllers/user.ts");
@@ -56,12 +52,7 @@ describe("filterByScope", () => {
 	});
 
 	it("matches brace expansion patterns like {ts,tsx}", () => {
-		const files = [
-			"src/index.ts",
-			"src/App.tsx",
-			"src/style.css",
-			"src/utils.js",
-		];
+		const files = ["src/index.ts", "src/App.tsx", "src/style.css", "src/utils.js"];
 		const result = filterByScope(files, "**/*.{ts,tsx}");
 		expect(result).toContain("src/index.ts");
 		expect(result).toContain("src/App.tsx");

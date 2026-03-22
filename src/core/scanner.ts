@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import fg from "fast-glob";
 
@@ -47,7 +47,14 @@ interface Detector {
 export async function scanProject(cwd: string): Promise<ScanResult[]> {
 	const files = fg.sync(["**/*.{ts,tsx,js,jsx,py,go,java,rb,rs}", "**/*.json"], {
 		cwd,
-		ignore: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.git/**", "**/vendor/**", "**/venv/**"],
+		ignore: [
+			"**/node_modules/**",
+			"**/dist/**",
+			"**/build/**",
+			"**/.git/**",
+			"**/vendor/**",
+			"**/venv/**",
+		],
 		onlyFiles: true,
 		dot: false,
 	});
@@ -69,7 +76,9 @@ export async function scanProject(cwd: string): Promise<ScanResult[]> {
 				for (const entry of readdirSync(monoDir)) {
 					pkgJsonPaths.push(join(monoDir, entry, "package.json"));
 				}
-			} catch { /* ignore */ }
+			} catch {
+				/* ignore */
+			}
 		}
 	}
 
@@ -80,7 +89,9 @@ export async function scanProject(cwd: string): Promise<ScanResult[]> {
 				const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 				if (!packageJson) packageJson = pkg;
 				Object.assign(allNodeDeps, pkg.dependencies || {}, pkg.devDependencies || {});
-			} catch { /* ignore */ }
+			} catch {
+				/* ignore */
+			}
 		}
 	}
 	// Attach merged deps so hasDependency can find them
@@ -143,7 +154,9 @@ function searchFiles(
 					}
 				}
 			}
-		} catch { /* skip unreadable */ }
+		} catch {
+			/* skip unreadable */
+		}
 
 		if (evidence.length >= 10) break; // enough evidence
 	}
@@ -190,7 +203,9 @@ function parsePythonDeps(cwd: string): string[] {
 					if (name) deps.push(name);
 				}
 			}
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}
 
 	// pyproject.toml (simplified parsing)
@@ -207,7 +222,9 @@ function parsePythonDeps(cwd: string): string[] {
 					deps.push(m[1].trim());
 				}
 			}
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}
 
 	// setup.py (simplified)
@@ -222,7 +239,9 @@ function parsePythonDeps(cwd: string): string[] {
 					deps.push(m[1].trim());
 				}
 			}
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}
 
 	return deps;
@@ -252,13 +271,20 @@ function detectPrimaryLang(files: string[]): DetectorContext["primaryLang"] {
 
 function langGlob(ctx: DetectorContext): string {
 	switch (ctx.primaryLang) {
-		case "ts": return "**/*.{ts,tsx,js,jsx}";
-		case "py": return "**/*.py";
-		case "go": return "**/*.go";
-		case "java": return "**/*.java";
-		case "rb": return "**/*.rb";
-		case "rs": return "**/*.rs";
-		default: return "**/*.{ts,js,py,go,java,rb,rs}";
+		case "ts":
+			return "**/*.{ts,tsx,js,jsx}";
+		case "py":
+			return "**/*.py";
+		case "go":
+			return "**/*.go";
+		case "java":
+			return "**/*.java";
+		case "rb":
+			return "**/*.rb";
+		case "rs":
+			return "**/*.rs";
+		default:
+			return "**/*.{ts,js,py,go,java,rb,rs}";
 	}
 }
 
@@ -276,7 +302,16 @@ function pickGateway(files: string[], fallback: string): string {
 	if (files.length === 0) return fallback;
 
 	const GOOD_DIRS = ["packages/", "src/", "lib/", "app/"];
-	const GOOD_NAMES = ["service", "client", "sdk", "lib", "middleware", "gateway", "wrapper", "provider"];
+	const GOOD_NAMES = [
+		"service",
+		"client",
+		"sdk",
+		"lib",
+		"middleware",
+		"gateway",
+		"wrapper",
+		"provider",
+	];
 
 	// Score each file
 	const scored = files.map((f) => {
@@ -294,10 +329,7 @@ function pickGateway(files: string[], fallback: string): string {
 }
 
 function globToRegex(glob: string): RegExp {
-	const r = glob
-		.replace(/\./g, "\\.")
-		.replace(/\*\*/g, ".*")
-		.replace(/\*/g, "[^/]*");
+	const r = glob.replace(/\./g, "\\.").replace(/\*\*/g, ".*").replace(/\*/g, "[^/]*");
 	return new RegExp(r);
 }
 
@@ -316,15 +348,19 @@ const DETECTORS: Detector[] = [
 
 			if (!sdk) {
 				// Also search for payment-related patterns in code
-				const evidence = searchFiles(ctx, [
-					"stripe.charges.create",
-					"stripe.paymentIntents",
-					"paddle.transactions",
-					"billing",
-					"charge(",
-					"createPayment",
-					"processPayment",
-				], ["**/*.{ts,js,py,go,java,rb}"]);
+				const evidence = searchFiles(
+					ctx,
+					[
+						"stripe.charges.create",
+						"stripe.paymentIntents",
+						"paddle.transactions",
+						"billing",
+						"charge(",
+						"createPayment",
+						"processPayment",
+					],
+					["**/*.{ts,js,py,go,java,rb}"],
+				);
 
 				if (evidence.length < 2) return null;
 
@@ -334,7 +370,8 @@ const DETECTORS: Detector[] = [
 					evidence: evidence.slice(0, 5),
 					purposeData: {
 						id: "billing-tracking",
-						purpose: `All payment and billing operations must be traceable. Every charge, refund, and subscription change must include user identification and tracking metadata to prevent revenue leakage and enable audit trails.`,
+						purpose:
+							"All payment and billing operations must be traceable. Every charge, refund, and subscription change must include user identification and tracking metadata to prevent revenue leakage and enable audit trails.",
 						violations: [
 							"Payment operations without userId or requestId metadata",
 							"Direct payment API calls bypassing the designated payment service",
@@ -348,7 +385,8 @@ const DETECTORS: Detector[] = [
 							title: "Untracked payment",
 							code: `await stripe.charges.create({ amount, currency: "usd" });\n// No userId, no tracking, no audit trail`,
 						},
-						context_hint: "Look for payment/charge/billing function calls. Every one must include user identification and tracking metadata.",
+						context_hint:
+							"Look for payment/charge/billing function calls. Every one must include user identification and tracking metadata.",
 						scope: langGlob(ctx),
 						severity: "error",
 					},
@@ -380,7 +418,8 @@ const DETECTORS: Detector[] = [
 				evidence: [...evidence, ...webhookEvidence].slice(0, 5),
 				purposeData: {
 					id: "billing-tracking",
-					purpose: `Payment flows must follow a strict sequence. Charge: validate server-side → create idempotent intent → log audit → confirm. Webhook: verify signature → persist raw event → deduplicate → process → acknowledge. Any step out of order or missing causes revenue leakage, double charges, or lost events.`,
+					purpose:
+						"Payment flows must follow a strict sequence. Charge: validate server-side → create idempotent intent → log audit → confirm. Webhook: verify signature → persist raw event → deduplicate → process → acknowledge. Any step out of order or missing causes revenue leakage, double charges, or lost events.",
 					violations: [
 						"SEQUENCE BREAK: Webhook processes event before persisting it (must be store → process, never process → store)",
 						"SEQUENCE BREAK: Charge created before server-side price validation (client amount trusted)",
@@ -392,13 +431,14 @@ const DETECTORS: Detector[] = [
 					],
 					good_example: {
 						title: "Correct sequence: webhook flow",
-						code: `// Step 1: VERIFY — always first\nconst event = stripe.webhooks.constructEvent(body, sig, secret);\n// Step 2: PERSIST — store raw event before any processing\nawait db.webhookEvent.create({ eventId: event.id, raw: body });\n// Step 3: DEDUPLICATE — skip if already processed\nif (await isProcessed(event.id)) return res.json({ received: true });\n// Step 4: PROCESS — business logic\nawait paymentService.fulfill(event);\n// Step 5: ACKNOWLEDGE — mark as processed\nawait markProcessed(event.id);`,
+						code: "// Step 1: VERIFY — always first\nconst event = stripe.webhooks.constructEvent(body, sig, secret);\n// Step 2: PERSIST — store raw event before any processing\nawait db.webhookEvent.create({ eventId: event.id, raw: body });\n// Step 3: DEDUPLICATE — skip if already processed\nif (await isProcessed(event.id)) return res.json({ received: true });\n// Step 4: PROCESS — business logic\nawait paymentService.fulfill(event);\n// Step 5: ACKNOWLEDGE — mark as processed\nawait markProcessed(event.id);",
 					},
 					bad_example: {
 						title: "Broken sequence: process before store",
-						code: `const event = JSON.parse(req.body); // no signature verification!\nawait updateSubscription(event.data); // processes before storing\nawait db.webhookEvent.create({ data: event }); // if line above crashes, event lost\n// no deduplication — webhook retry = double subscription update`,
+						code: "const event = JSON.parse(req.body); // no signature verification!\nawait updateSubscription(event.data); // processes before storing\nawait db.webhookEvent.create({ data: event }); // if line above crashes, event lost\n// no deduplication — webhook retry = double subscription update",
 					},
-					context_hint: `Trace the SEQUENCE of operations in webhook handlers and payment flows. The order matters: 1→verify, 2→persist, 3→deduplicate, 4→process, 5→acknowledge. Flag any code where processing happens before persistence, or where signature verification is not the first operation.`,
+					context_hint:
+						"Trace the SEQUENCE of operations in webhook handlers and payment flows. The order matters: 1→verify, 2→persist, 3→deduplicate, 4→process, 5→acknowledge. Flag any code where processing happens before persistence, or where signature verification is not the first operation.",
 					scope: langGlob(ctx),
 					severity: "error",
 				},
@@ -485,7 +525,8 @@ const DETECTORS: Detector[] = [
 			const knex = hasDependency(ctx, "knex");
 			const sqlalchemy = hasDependency(ctx, "sqlalchemy", "SQLAlchemy");
 			const django = hasDependency(ctx, "django", "Django");
-			const orm = prisma || typeorm || drizzle || sequelize || mongoose || knex || sqlalchemy || django;
+			const orm =
+				prisma || typeorm || drizzle || sequelize || mongoose || knex || sqlalchemy || django;
 
 			// More specific DB patterns — avoid matching numpy/file operations
 			const evidence = searchFiles(ctx, [
@@ -505,7 +546,13 @@ const DETECTORS: Detector[] = [
 			if (!orm && evidence.length < 3) return null;
 
 			const ormName = orm || "database";
-			const txMethod = prisma ? "db.$transaction" : typeorm ? "queryRunner.startTransaction" : drizzle ? "db.transaction" : "db.transaction";
+			const txMethod = prisma
+				? "db.$transaction"
+				: typeorm
+					? "queryRunner.startTransaction"
+					: drizzle
+						? "db.transaction"
+						: "db.transaction";
 
 			return {
 				category: "database",
@@ -513,12 +560,13 @@ const DETECTORS: Detector[] = [
 				evidence: evidence.slice(0, 5),
 				purposeData: {
 					id: "transaction-safety",
-					purpose: `Read-modify-write operations on shared state must be wrapped in database transactions with proper isolation. Unbounded queries must have pagination. Deletions should be soft-delete unless explicitly justified. Without these, concurrent requests corrupt data and careless queries take down the DB.`,
+					purpose:
+						"Read-modify-write operations on shared state must be wrapped in database transactions with proper isolation. Unbounded queries must have pagination. Deletions should be soft-delete unless explicitly justified. Without these, concurrent requests corrupt data and careless queries take down the DB.",
 					violations: [
 						"DB read followed by DB write on same record without transaction wrapping",
 						"Balance/counter/inventory updates without optimistic locking (version/updatedAt check) or transactions",
 						"Multiple sequential writes that should be atomic (e.g., order + inventory deduction)",
-						`findMany/find without limit or pagination — unbounded queries on growing tables`,
+						"findMany/find without limit or pagination — unbounded queries on growing tables",
 						"Hard delete (DELETE/destroy) on user-facing data instead of soft delete (deletedAt flag)",
 						"Raw SQL with string interpolation instead of parameterized queries (SQL injection risk)",
 						"Missing unique constraint or upsert for operations that should be idempotent",
@@ -529,7 +577,7 @@ const DETECTORS: Detector[] = [
 					},
 					bad_example: {
 						title: "Unprotected + unbounded + hard delete",
-						code: `const account = await db.account.findUnique({ where: { id } });\nawait db.account.update({ data: { balance: account.balance - amount } });\n// No transaction, no version check\n\nconst allUsers = await db.user.findMany(); // unbounded!\nawait db.user.delete({ where: { id } }); // hard delete, data gone forever`,
+						code: "const account = await db.account.findUnique({ where: { id } });\nawait db.account.update({ data: { balance: account.balance - amount } });\n// No transaction, no version check\n\nconst allUsers = await db.user.findMany(); // unbounded!\nawait db.user.delete({ where: { id } }); // hard delete, data gone forever",
 					},
 					context_hint: `Check for: 1) read-then-write without ${txMethod}, 2) findMany/find without take/limit, 3) .delete()/.destroy() without soft-delete pattern, 4) string concatenation in SQL queries, 5) missing version/updatedAt checks on concurrent-write-prone tables.`,
 					scope: langGlob(ctx),
@@ -575,18 +623,16 @@ const DETECTORS: Detector[] = [
 
 			if (!hasControllers && !hasServices) return null;
 
-			const controllerLayer = foundLayers.find((l) =>
-				["controllers", "handlers", "routes"].includes(l),
-			) || "controllers";
-			const serviceLayer = foundLayers.find((l) =>
-				["services", "usecases", "use-cases"].includes(l),
-			) || "services";
+			const controllerLayer =
+				foundLayers.find((l) => ["controllers", "handlers", "routes"].includes(l)) || "controllers";
+			const serviceLayer =
+				foundLayers.find((l) => ["services", "usecases", "use-cases"].includes(l)) || "services";
 
 			return {
 				category: "architecture",
 				label: `Layer structure: ${foundLayers.join(", ")}`,
 				evidence: foundLayers.map((l) => ({
-					file: l + "/",
+					file: `${l}/`,
 					snippet: `Directory found: ${l}/`,
 				})),
 				purposeData: {
@@ -595,8 +641,8 @@ const DETECTORS: Detector[] = [
 					violations: [
 						`${serviceLayer}/ returning HTTP status codes, response objects, or headers`,
 						`${controllerLayer}/ containing business logic (validation, calculations, state transitions)`,
-						`Domain entities importing framework-specific types (ORM decorators, HTTP types)`,
-						`Inner layers importing from outer layers`,
+						"Domain entities importing framework-specific types (ORM decorators, HTTP types)",
+						"Inner layers importing from outer layers",
 					],
 					good_example: {
 						title: "Service returns business result",
@@ -665,7 +711,8 @@ const DETECTORS: Detector[] = [
 						title: "Trivial test with internal mocking",
 						code: `test("creates user", async () => {\n  jest.spyOn(repo, "save").mockResolvedValue({ id: 1 });\n  const user = await userService.create({ name: "test" });\n  expect(user).toBeDefined(); // tells nothing\n  expect(repo.save).toHaveBeenCalledTimes(1); // tests mock, not behavior\n});`,
 					},
-					context_hint: "Check: 1) sole assertions being toBeDefined/toBeTruthy, 2) jest.spyOn on internal modules instead of external APIs, 3) .toThrow() without error class, 4) test names vs actual assertions mismatch, 5) missing edge case tests for new business logic.",
+					context_hint:
+						"Check: 1) sole assertions being toBeDefined/toBeTruthy, 2) jest.spyOn on internal modules instead of external APIs, 3) .toThrow() without error class, 4) test names vs actual assertions mismatch, 5) missing edge case tests for new business logic.",
 					scope: ctx.primaryLang === "py" ? "**/test_*.py" : "**/*.{test,spec}.{ts,js,tsx,jsx}",
 					severity: "warning",
 				},
@@ -696,9 +743,25 @@ const DETECTORS: Detector[] = [
 
 			// Check for custom tokens/theme files
 			const themeFiles = hasFiles(ctx, ["theme", "tokens", "design-system", "design-tokens"]);
-			const componentLib = hasFiles(ctx, ["ui/button", "ui/input", "ui/modal", "ui/dialog", "components/ui"]);
+			const componentLib = hasFiles(ctx, [
+				"ui/button",
+				"ui/input",
+				"ui/modal",
+				"ui/dialog",
+				"components/ui",
+			]);
 
-			const dsName = shadcn ? "shadcn/ui" : mui ? "MUI" : antd ? "Ant Design" : chakra ? "Chakra UI" : mantine ? "Mantine" : null;
+			const dsName = shadcn
+				? "shadcn/ui"
+				: mui
+					? "MUI"
+					: antd
+						? "Ant Design"
+						: chakra
+							? "Chakra UI"
+							: mantine
+								? "Mantine"
+								: null;
 
 			// Need either a known DS or custom component lib
 			if (!dsName && componentLib.length < 2 && themeFiles.length === 0) return null;
@@ -711,7 +774,7 @@ const DETECTORS: Detector[] = [
 				ctx,
 				[
 					"style={{",
-					"className=\"bg-",
+					'className="bg-',
 					"text-gray-",
 					"text-blue-",
 					"text-red-",
@@ -793,7 +856,8 @@ const DETECTORS: Detector[] = [
 				evidence: evidence.slice(0, 5),
 				purposeData: {
 					id: "error-handling",
-					purpose: `Errors must be handled explicitly: catch blocks must either recover, re-throw with context, or log with structured data — never swallow silently. Unhandled promise rejections and generic catch-all blocks are the #1 cause of invisible production failures.`,
+					purpose:
+						"Errors must be handled explicitly: catch blocks must either recover, re-throw with context, or log with structured data — never swallow silently. Unhandled promise rejections and generic catch-all blocks are the #1 cause of invisible production failures.",
 					violations: [
 						"Empty catch block — error silently swallowed, no logging, no recovery",
 						"catch block with only console.log — no structured logging, no error tracking",
@@ -809,9 +873,10 @@ const DETECTORS: Detector[] = [
 					},
 					bad_example: {
 						title: "Swallowed error",
-						code: `try {\n  await processPayment(order);\n} catch (e) {\n  console.log(e); // logged to stdout, lost in production\n  // error swallowed — caller thinks payment succeeded\n}`,
+						code: "try {\n  await processPayment(order);\n} catch (e) {\n  console.log(e); // logged to stdout, lost in production\n  // error swallowed — caller thinks payment succeeded\n}",
 					},
-					context_hint: "Search for empty catch blocks, catch blocks with only console.log, .catch(() => {}), and async functions without error handling. Every catch should either recover (return fallback), re-throw with context, or log with structured data (logger, not console).",
+					context_hint:
+						"Search for empty catch blocks, catch blocks with only console.log, .catch(() => {}), and async functions without error handling. Every catch should either recover (return fallback), re-throw with context, or log with structured data (logger, not console).",
 					scope: langGlob(ctx),
 					severity: "warning",
 				},
@@ -837,8 +902,8 @@ const DETECTORS: Detector[] = [
 			]);
 
 			// Check for .env in git
-			const envFiles = ctx.files.filter((f) =>
-				f === ".env" || f === ".env.local" || f === ".env.production",
+			const envFiles = ctx.files.filter(
+				(f) => f === ".env" || f === ".env.local" || f === ".env.production",
 			);
 
 			if (evidence.length < 1 && envFiles.length === 0) return null;
@@ -852,7 +917,8 @@ const DETECTORS: Detector[] = [
 				].slice(0, 5),
 				purposeData: {
 					id: "secret-safety",
-					purpose: `Secrets (API keys, tokens, passwords, private keys) must NEVER appear in source code, git history, logs, or API responses. All secrets must come from environment variables or a secrets manager. .env files must be in .gitignore.`,
+					purpose:
+						"Secrets (API keys, tokens, passwords, private keys) must NEVER appear in source code, git history, logs, or API responses. All secrets must come from environment variables or a secrets manager. .env files must be in .gitignore.",
 					violations: [
 						"API keys, tokens, or passwords hardcoded in source files",
 						".env or .env.production tracked in git (must be in .gitignore)",
@@ -870,7 +936,8 @@ const DETECTORS: Detector[] = [
 						title: "Hardcoded secrets",
 						code: `const stripe = new Stripe("sk_live_abc123def456");\nconst dbUrl = "postgresql://admin:password123@prod-db:5432/app";\n\n// Logged to stdout\nconsole.log("Auth failed for token:", req.headers.authorization);`,
 					},
-					context_hint: "Search for: sk_live_, sk_test_, AKIA (AWS), hardcoded strings assigned to variables named key/secret/password/token, .env files not in .gitignore, console.log/logger calls that include token/key/secret variables, and error responses that include stack traces.",
+					context_hint:
+						"Search for: sk_live_, sk_test_, AKIA (AWS), hardcoded strings assigned to variables named key/secret/password/token, .env files not in .gitignore, console.log/logger calls that include token/key/secret variables, and error responses that include stack traces.",
 					scope: langGlob(ctx),
 					severity: "error",
 				},
@@ -883,8 +950,12 @@ const DETECTORS: Detector[] = [
 		name: "api-contract",
 		category: "api",
 		detect(ctx) {
-			const hasApi = ctx.files.some((f) =>
-				f.includes("routes/") || f.includes("controllers/") || f.includes("handlers/") || f.includes("api/"),
+			const hasApi = ctx.files.some(
+				(f) =>
+					f.includes("routes/") ||
+					f.includes("controllers/") ||
+					f.includes("handlers/") ||
+					f.includes("api/"),
 			);
 
 			const evidence = searchFiles(ctx, [
@@ -916,7 +987,8 @@ const DETECTORS: Detector[] = [
 				evidence: evidence.slice(0, 5),
 				purposeData: {
 					id: "api-contract",
-					purpose: `API endpoints must validate all input at the boundary, return consistent response shapes, and never break existing clients. Input validation → business logic → consistent response is the required sequence. Missing validation means untrusted data hits your database. Inconsistent responses break mobile apps silently.`,
+					purpose:
+						"API endpoints must validate all input at the boundary, return consistent response shapes, and never break existing clients. Input validation → business logic → consistent response is the required sequence. Missing validation means untrusted data hits your database. Inconsistent responses break mobile apps silently.",
 					violations: [
 						"SEQUENCE BREAK: Request body used directly without validation/parsing (req.body.email without schema check)",
 						"MISSING STEP: No input validation on POST/PUT/PATCH endpoints — raw user input reaches DB or services",
@@ -932,9 +1004,10 @@ const DETECTORS: Detector[] = [
 					},
 					bad_example: {
 						title: "No validation, inconsistent response",
-						code: `// Raw input — SQL injection, type errors, garbage data\nconst user = await db.user.create({ data: req.body });\n// Sometimes returns array, sometimes object\nres.json(users); // vs res.json({ data: user })\n// Error leaks internals\nres.status(500).json({ error: err.message, stack: err.stack });`,
+						code: "// Raw input — SQL injection, type errors, garbage data\nconst user = await db.user.create({ data: req.body });\n// Sometimes returns array, sometimes object\nres.json(users); // vs res.json({ data: user })\n// Error leaks internals\nres.status(500).json({ error: err.message, stack: err.stack });",
 					},
-					context_hint: "Check every POST/PUT/PATCH handler for input validation as the FIRST operation. Check response shapes for consistency (always {data} or always {items, total}). Check error handlers for internal detail leakage.",
+					context_hint:
+						"Check every POST/PUT/PATCH handler for input validation as the FIRST operation. Check response shapes for consistency (always {data} or always {items, total}). Check error handlers for internal detail leakage.",
 					scope: langGlob(ctx),
 					severity: "warning",
 				},
@@ -947,7 +1020,16 @@ const DETECTORS: Detector[] = [
 		name: "performance",
 		category: "performance",
 		detect(ctx) {
-			const orm = hasDependency(ctx, "@prisma/client", "typeorm", "drizzle-orm", "sequelize", "mongoose", "sqlalchemy", "django");
+			const orm = hasDependency(
+				ctx,
+				"@prisma/client",
+				"typeorm",
+				"drizzle-orm",
+				"sequelize",
+				"mongoose",
+				"sqlalchemy",
+				"django",
+			);
 
 			const evidence = searchFiles(ctx, [
 				"for (const",
@@ -963,9 +1045,7 @@ const DETECTORS: Detector[] = [
 			]);
 
 			// Look specifically for await-in-loop patterns
-			const loopAwaitEvidence = searchFiles(ctx, [
-				"await ",
-			], ["**/*.{ts,js,py}"]);
+			const loopAwaitEvidence = searchFiles(ctx, ["await "], ["**/*.{ts,js,py}"]);
 
 			if (!orm && evidence.length < 3) return null;
 
@@ -975,7 +1055,8 @@ const DETECTORS: Detector[] = [
 				evidence: evidence.slice(0, 5),
 				purposeData: {
 					id: "performance-safety",
-					purpose: `Database queries must never run inside loops (N+1 problem). Parallelizable async operations must not be sequential. Data filtering must happen in the query, not in application memory. These patterns cause linear or exponential slowdown as data grows.`,
+					purpose:
+						"Database queries must never run inside loops (N+1 problem). Parallelizable async operations must not be sequential. Data filtering must happen in the query, not in application memory. These patterns cause linear or exponential slowdown as data grows.",
 					violations: [
 						"N+1: DB query inside a for/forEach/map loop — use batch query or join instead",
 						"SEQUENTIAL: await inside for-loop for independent operations — use Promise.all",
@@ -986,13 +1067,14 @@ const DETECTORS: Detector[] = [
 					],
 					good_example: {
 						title: "Batch query + parallel execution",
-						code: `// Batch: one query instead of N\nconst users = await db.user.findMany({\n  where: { id: { in: userIds } },\n  take: 20, // bounded\n});\n\n// Parallel: independent operations\nconst [profile, orders, settings] = await Promise.all([\n  getProfile(userId),\n  getOrders(userId),\n  getSettings(userId),\n]);`,
+						code: "// Batch: one query instead of N\nconst users = await db.user.findMany({\n  where: { id: { in: userIds } },\n  take: 20, // bounded\n});\n\n// Parallel: independent operations\nconst [profile, orders, settings] = await Promise.all([\n  getProfile(userId),\n  getOrders(userId),\n  getSettings(userId),\n]);",
 					},
 					bad_example: {
 						title: "N+1 + sequential + memory filter",
-						code: `// N+1: query per iteration\nfor (const orderId of orderIds) {\n  const order = await db.order.findUnique({ where: { id: orderId } });\n  results.push(order);\n}\n\n// Memory filter: loads ALL then filters\nconst allUsers = await db.user.findMany();\nconst active = allUsers.filter(u => u.active);`,
+						code: "// N+1: query per iteration\nfor (const orderId of orderIds) {\n  const order = await db.order.findUnique({ where: { id: orderId } });\n  results.push(order);\n}\n\n// Memory filter: loads ALL then filters\nconst allUsers = await db.user.findMany();\nconst active = allUsers.filter(u => u.active);",
 					},
-					context_hint: "Search for await/query calls inside for/forEach/map loops. Check findMany/find calls for missing where/limit. Look for .filter() after findMany (should be WHERE clause). Check sequential awaits that could be Promise.all.",
+					context_hint:
+						"Search for await/query calls inside for/forEach/map loops. Check findMany/find calls for missing where/limit. Look for .filter() after findMany (should be WHERE clause). Check sequential awaits that could be Promise.all.",
 					scope: langGlob(ctx),
 					severity: "warning",
 				},

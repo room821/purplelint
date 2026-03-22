@@ -14,9 +14,7 @@ When in doubt, judge as pass. Only flag clear violations.`);
 	sections.push(`[Purpose]
 ${purpose.purpose.trim()}`);
 
-	sections.push(
-		`[Violation Criteria]\n${purpose.violations.map((v) => `- ${v}`).join("\n")}`,
-	);
+	sections.push(`[Violation Criteria]\n${purpose.violations.map((v) => `- ${v}`).join("\n")}`);
 
 	if (purpose.good_examples.length > 0) {
 		const examples = purpose.good_examples
@@ -37,9 +35,7 @@ ${purpose.purpose.trim()}`);
 	}
 
 	if (purpose.exceptions && purpose.exceptions.length > 0) {
-		sections.push(
-			`[Exceptions]\n${purpose.exceptions.map((e) => `- ${e}`).join("\n")}`,
-		);
+		sections.push(`[Exceptions]\n${purpose.exceptions.map((e) => `- ${e}`).join("\n")}`);
 	}
 
 	// Build code context section
@@ -73,9 +69,7 @@ function buildCodeSection(context: CodeContext): string {
 	}
 
 	if (context.typeDefinitions && context.typeDefinitions.length > 0) {
-		parts.push(
-			`\n--- Type Definitions ---\n${context.typeDefinitions.join("\n")}`,
-		);
+		parts.push(`\n--- Type Definitions ---\n${context.typeDefinitions.join("\n")}`);
 	}
 
 	return parts.join("\n");

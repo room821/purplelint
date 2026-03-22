@@ -5,11 +5,7 @@ import { parseConfig } from "../../core/config.js";
 import { collectContext } from "../../core/context.js";
 import { buildPrompt } from "../../core/prompt-builder.js";
 import { parsePurpose } from "../../core/purpose.js";
-import {
-	createRunResult,
-	formatResultJson,
-	formatResultMarkdown,
-} from "../../core/result.js";
+import { createRunResult, formatResultJson, formatResultMarkdown } from "../../core/result.js";
 import { filterByScope } from "../../core/scope.js";
 import type { ContextStrategy } from "../../types/config.js";
 import * as ui from "../ui.js";
@@ -45,9 +41,7 @@ export async function runRun(options: RunOptions) {
 	const diffRef = options.diff || "HEAD";
 	const outputFormat = options.output || config.config?.output_format || "prompt";
 	const contextStrategy =
-		(options.context as ContextStrategy) ||
-		config.config?.context_strategy ||
-		"diff+imports";
+		(options.context as ContextStrategy) || config.config?.context_strategy || "diff+imports";
 
 	// Select purposes
 	let selectedIds: string[];
@@ -114,11 +108,12 @@ export async function runRun(options: RunOptions) {
 		const purpose = parsePurpose(purposePath);
 
 		// Filter files by scope, merging global + purpose-level ignore
-		const ignorePatterns = [
-			...(config.config?.ignore || []),
-			...(entry.ignore || []),
-		];
-		const scopedFiles = filterByScope(changedFiles, entry.scope, ignorePatterns.length ? ignorePatterns : undefined);
+		const ignorePatterns = [...(config.config?.ignore || []), ...(entry.ignore || [])];
+		const scopedFiles = filterByScope(
+			changedFiles,
+			entry.scope,
+			ignorePatterns.length ? ignorePatterns : undefined,
+		);
 
 		if (scopedFiles.length === 0) {
 			ui.log(`${purposeId}: no files match scope "${entry.scope}"`);
@@ -126,11 +121,7 @@ export async function runRun(options: RunOptions) {
 		}
 
 		// Collect context
-		const context = await collectContext(
-			scopedFiles,
-			contextStrategy,
-			diffRef,
-		);
+		const context = await collectContext(scopedFiles, contextStrategy, diffRef);
 
 		// Build prompt
 		const prompt = buildPrompt(purpose, context);
@@ -156,10 +147,7 @@ export async function runRun(options: RunOptions) {
 }
 
 function findAilintDir(): string {
-	const candidates = [
-		join(process.cwd(), "purplelint"),
-		join(process.cwd(), ".purplelint"),
-	];
+	const candidates = [join(process.cwd(), "purplelint"), join(process.cwd(), ".purplelint")];
 
 	for (const dir of candidates) {
 		if (existsSync(dir)) return dir;

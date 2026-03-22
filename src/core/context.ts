@@ -63,9 +63,7 @@ export async function collectContext(
 	const context: CodeContext = { diff, files };
 
 	if (strategy !== "diff") {
-		context.imports = files.flatMap((f) =>
-			f.imports.map((imp) => parseImportStatement(imp)),
-		);
+		context.imports = files.flatMap((f) => f.imports.map((imp) => parseImportStatement(imp)));
 	}
 
 	return context;
@@ -83,9 +81,7 @@ function extractImports(content: string): string[] {
 
 function parseImportStatement(statement: string): ImportInfo {
 	// Match: import { x, y } from "module"
-	const namedMatch = statement.match(
-		/import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/,
-	);
+	const namedMatch = statement.match(/import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/);
 	if (namedMatch) {
 		return {
 			source: namedMatch[2],
@@ -94,9 +90,7 @@ function parseImportStatement(statement: string): ImportInfo {
 	}
 
 	// Match: import x from "module"
-	const defaultMatch = statement.match(
-		/import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/,
-	);
+	const defaultMatch = statement.match(/import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/);
 	if (defaultMatch) {
 		return {
 			source: defaultMatch[2],
@@ -105,9 +99,7 @@ function parseImportStatement(statement: string): ImportInfo {
 	}
 
 	// Match: import * as x from "module"
-	const namespaceMatch = statement.match(
-		/import\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]/,
-	);
+	const namespaceMatch = statement.match(/import\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]/);
 	if (namespaceMatch) {
 		return {
 			source: namespaceMatch[2],

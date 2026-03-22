@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { parseConfig, validateConfig } from "./config.js";
 import type { PurplelintConfig } from "../types/config.js";
+import { parseConfig, validateConfig } from "./config.js";
 
 /**
  * Finds purplelint/ directories by walking up from the given file path to rootDir.
@@ -20,9 +20,7 @@ export function lookupAilintConfigs(filePath: string, rootDir: string): Purpleli
 			try {
 				const config = parseConfig(ailintYml);
 				const errors = validateConfig(config);
-				const hasErrors = errors.some(
-					(e) => !e.message.startsWith("missing optional"),
-				);
+				const hasErrors = errors.some((e) => !e.message.startsWith("missing optional"));
 				if (!hasErrors) {
 					configs.push(config);
 				}

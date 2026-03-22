@@ -41,7 +41,7 @@ export async function runValidate(options: ValidateOptions) {
 		} else {
 			const hasErrors = configErrors.some((e) => !e.message.startsWith("missing optional"));
 			if (hasErrors) {
-				ui.error(`purplelint.yml — invalid`);
+				ui.error("purplelint.yml — invalid");
 				for (const err of configErrors) {
 					ui.log(`  └─ ${err.message}`);
 				}
@@ -107,10 +107,7 @@ export async function runValidate(options: ValidateOptions) {
 }
 
 function findAilintDir(): string {
-	const candidates = [
-		join(process.cwd(), "purplelint"),
-		join(process.cwd(), ".purplelint"),
-	];
+	const candidates = [join(process.cwd(), "purplelint"), join(process.cwd(), ".purplelint")];
 
 	for (const dir of candidates) {
 		if (existsSync(dir)) return dir;

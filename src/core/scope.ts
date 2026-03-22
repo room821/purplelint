@@ -66,7 +66,11 @@ function matchesGlob(file: string, pattern: string): boolean {
 			// {a,b,c} — brace expansion to (a|b|c)
 			const closeIdx = pattern.indexOf("}", i);
 			if (closeIdx !== -1) {
-				const options = pattern.slice(i + 1, closeIdx).split(",").map((o) => o.replace(/\./g, "\\.")).join("|");
+				const options = pattern
+					.slice(i + 1, closeIdx)
+					.split(",")
+					.map((o) => o.replace(/\./g, "\\."))
+					.join("|");
 				regexStr += `(${options})`;
 				i = closeIdx + 1;
 			} else {

@@ -54,10 +54,7 @@ export async function runList(options: ListOptions) {
 }
 
 function findAilintDir(): string {
-	const candidates = [
-		join(process.cwd(), "purplelint"),
-		join(process.cwd(), ".purplelint"),
-	];
+	const candidates = [join(process.cwd(), "purplelint"), join(process.cwd(), ".purplelint")];
 
 	for (const dir of candidates) {
 		if (existsSync(dir)) return dir;

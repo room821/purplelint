@@ -54,9 +54,7 @@ export function formatResultMarkdown(result: PurplelintRunResult): string {
 		lines.push("");
 	}
 
-	lines.push(
-		`**Summary:** ${violations.length} violation(s), ${passes.length} passed`,
-	);
+	lines.push(`**Summary:** ${violations.length} violation(s), ${passes.length} passed`);
 
 	return lines.join("\n");
 }

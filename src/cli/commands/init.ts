@@ -43,13 +43,7 @@ export async function runInit(options: InitOptions) {
 			config: {
 				context_strategy: "diff+imports",
 				output_format: "json",
-				ignore: [
-					"**/node_modules/**",
-					"**/dist/**",
-					"**/build/**",
-					"**/.git/**",
-					"scripts/**",
-				],
+				ignore: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.git/**", "scripts/**"],
 			},
 			purposes: [],
 		};
