@@ -380,25 +380,25 @@ const DETECTORS: Detector[] = [
 				evidence: [...evidence, ...webhookEvidence].slice(0, 5),
 				purposeData: {
 					id: "billing-tracking",
-					purpose: `All ${sdk} operations must go through the designated payment service (${gatewayFile}). Webhook handlers must verify signatures, store events before processing, and use idempotency keys. Direct SDK calls bypass billing tracking, audit logging, and error handling, causing revenue leakage and compliance gaps.`,
+					purpose: `Payment flows must follow a strict sequence. Charge: validate server-side → create idempotent intent → log audit → confirm. Webhook: verify signature → persist raw event → deduplicate → process → acknowledge. Any step out of order or missing causes revenue leakage, double charges, or lost events.`,
 					violations: [
-						`Direct ${sdk} API calls outside the payment service`,
-						"Webhook handler without signature verification (constructEvent / verify_webhook_signature)",
-						"Webhook processing before persisting the raw event (process-then-store instead of store-then-process)",
-						"Payment mutations without idempotency keys — retries cause double charges",
-						"Trusting client-side amounts or prices instead of server-side lookup",
-						"Charges or refunds without audit trail logging (userId, requestId, timestamp)",
-						"Missing webhook event deduplication — same event processed twice",
+						"SEQUENCE BREAK: Webhook processes event before persisting it (must be store → process, never process → store)",
+						"SEQUENCE BREAK: Charge created before server-side price validation (client amount trusted)",
+						"MISSING STEP: Webhook handler without signature verification as the FIRST operation",
+						"MISSING STEP: Payment mutation without idempotency key — retries cause double charges",
+						"MISSING STEP: No deduplication check before processing webhook (same event.id processed twice)",
+						"MISSING STEP: Charge/refund without audit trail (userId, requestId, timestamp, amount)",
+						`BOUNDARY: Direct ${sdk} API calls outside the designated payment service (${gatewayFile})`,
 					],
 					good_example: {
-						title: "Safe webhook + payment flow",
-						code: `// 1. Verify signature\nconst event = stripe.webhooks.constructEvent(body, sig, webhookSecret);\n// 2. Store raw event FIRST\nawait db.webhookEvent.create({ data: { eventId: event.id, payload: body } });\n// 3. Process idempotently\nif (await isProcessed(event.id)) return;\nawait paymentService.fulfill(event, { idempotencyKey: event.id });`,
+						title: "Correct sequence: webhook flow",
+						code: `// Step 1: VERIFY — always first\nconst event = stripe.webhooks.constructEvent(body, sig, secret);\n// Step 2: PERSIST — store raw event before any processing\nawait db.webhookEvent.create({ eventId: event.id, raw: body });\n// Step 3: DEDUPLICATE — skip if already processed\nif (await isProcessed(event.id)) return res.json({ received: true });\n// Step 4: PROCESS — business logic\nawait paymentService.fulfill(event);\n// Step 5: ACKNOWLEDGE — mark as processed\nawait markProcessed(event.id);`,
 					},
 					bad_example: {
-						title: "Unsafe webhook handler",
-						code: `// No signature check!\nconst event = JSON.parse(req.body);\n// Process without storing — if this crashes, event is lost\nawait updateSubscription(event.data);\n// No idempotency — webhook retry = double update`,
+						title: "Broken sequence: process before store",
+						code: `const event = JSON.parse(req.body); // no signature verification!\nawait updateSubscription(event.data); // processes before storing\nawait db.webhookEvent.create({ data: event }); // if line above crashes, event lost\n// no deduplication — webhook retry = double subscription update`,
 					},
-					context_hint: `Check webhook handlers for: 1) signature verification, 2) raw event persistence before processing, 3) idempotency key or deduplication check. Check payment calls for: idempotencyKey param, server-side price lookup, audit metadata.`,
+					context_hint: `Trace the SEQUENCE of operations in webhook handlers and payment flows. The order matters: 1→verify, 2→persist, 3→deduplicate, 4→process, 5→acknowledge. Flag any code where processing happens before persistence, or where signature verification is not the first operation.`,
 					scope: langGlob(ctx),
 					severity: "error",
 				},
@@ -444,26 +444,27 @@ const DETECTORS: Detector[] = [
 				evidence: evidence.slice(0, 5),
 				purposeData: {
 					id: "auth-boundary",
-					purpose: `Authentication and authorization must be handled exclusively in the designated auth layer (${authFile}). Token expiry must be validated, refresh tokens must be rotated, and auth endpoints must be rate-limited. Scattered auth logic creates bypassable security gaps.`,
+					purpose: `Auth must follow a strict sequence per request: extract token → verify signature → validate expiry → attach user context → check permissions. This sequence runs ONCE in middleware (${authFile}), never in handlers or services. Auth endpoints must be rate-limited. Refresh tokens must be rotated on use.`,
 					violations: [
-						"Token parsing/verification outside the auth middleware",
-						"Direct access to req.headers.authorization in handlers or services",
-						"Missing token expiry validation — expired tokens accepted",
-						"Refresh tokens reused without rotation — stolen token works forever",
-						"Auth endpoints (login, register, reset) without rate limiting",
-						"Role/permission checks duplicated across service methods instead of middleware",
-						"Secrets or JWT keys hardcoded instead of from environment variables",
-						"Error messages revealing whether email/username exists (user enumeration)",
+						"SEQUENCE BREAK: Token used (decoded) before signature verification (jwt.decode instead of jwt.verify)",
+						"SEQUENCE BREAK: Permission check before authentication — unauthed user hits authz logic",
+						"MISSING STEP: Token expiry (exp) not validated — expired tokens accepted",
+						"MISSING STEP: Refresh token reused without rotation — stolen token works forever",
+						"MISSING STEP: Auth endpoints (login, register, reset-password) without rate limiting",
+						"BOUNDARY: Token parsing/verification outside ${authFile} — scattered in handlers or services",
+						"BOUNDARY: Direct access to req.headers.authorization in handlers or services",
+						"LEAK: Error messages revealing whether email/username exists (user enumeration)",
+						"LEAK: JWT secret hardcoded instead of from environment variable",
 					],
 					good_example: {
-						title: "Auth in middleware with expiry + rate limit",
-						code: `// ${authFile}\nconst decoded = jwt.verify(token, process.env.JWT_SECRET);\nif (decoded.exp < Date.now() / 1000) throw new TokenExpiredError();\n\n// Rate limit on auth routes\napp.use("/auth", rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }));\n\n// Handler — auth already verified\napp.get("/api/data", authMiddleware, handler);`,
+						title: "Correct sequence: middleware auth pipeline",
+						code: `// ${authFile} — runs ONCE per request\n// Step 1: EXTRACT\nconst token = req.headers.authorization?.split(" ")[1];\n// Step 2: VERIFY signature\nconst decoded = jwt.verify(token, process.env.JWT_SECRET);\n// Step 3: VALIDATE expiry\nif (decoded.exp < Date.now() / 1000) throw new TokenExpiredError();\n// Step 4: ATTACH user context\nreq.user = { id: decoded.sub, role: decoded.role };\n// Step 5: Handler uses req.user — no auth logic here\napp.get("/api/data", authMiddleware, (req, res) => service.get(req.user.id));`,
 					},
 					bad_example: {
-						title: "Auth in handler, no expiry check",
-						code: `app.get("/api/data", (req, res) => {\n  const token = req.headers.authorization?.split(" ")[1];\n  const user = jwt.decode(token); // decode, not verify!\n  // No expiry check, no rate limit, leaked into handler\n});`,
+						title: "Broken sequence: decode without verify, auth in handler",
+						code: `app.get("/api/data", (req, res) => {\n  const token = req.headers.authorization?.split(" ")[1];\n  const user = jwt.decode(token); // decode only — accepts UNSIGNED tokens!\n  // No expiry check, no rate limit, auth scattered into handler\n  if (user.role !== "admin") return res.status(403);\n});`,
 					},
-					context_hint: `Check for: 1) jwt.decode used without verify (accepts unsigned tokens), 2) missing exp/iat validation, 3) refresh token endpoint without rotation, 4) auth routes without rate limiting, 5) hardcoded secrets. Search outside ${authFile} for jwt/token/authorization usage.`,
+					context_hint: `Trace the auth SEQUENCE: 1→extract, 2→verify, 3→validate expiry, 4→attach context, 5→check permissions. Flag jwt.decode (not verify), missing exp checks, auth logic outside ${authFile}, and auth routes without rate limiting.`,
 					scope: langGlob(ctx),
 					severity: "error",
 				},
@@ -758,6 +759,240 @@ const DETECTORS: Detector[] = [
 						code: `<button\n  style={{ backgroundColor: "#3b82f6", padding: "8px 16px", borderRadius: "4px" }}\n>\n  Submit\n</button>\n// Bypasses theme, breaks dark mode, inconsistent with other buttons`,
 					},
 					context_hint: `Scan for raw HTML form elements and inline style={{}} in component files. Every <button>, <input>, <select>, <textarea> should use ${systemLabel}. Check for hardcoded hex/rgb colors outside ${tokenFile}.`,
+					scope: langGlob(ctx),
+					severity: "warning",
+				},
+			};
+		},
+	},
+
+	// 8. Error Handling
+	{
+		name: "error-handling",
+		category: "reliability",
+		detect(ctx) {
+			const evidence = searchFiles(ctx, [
+				"catch {}",
+				"catch (e) {}",
+				"catch (err) {}",
+				"catch (error) {}",
+				"catch (_)",
+				"except:",
+				"except Exception:",
+				"console.log(err",
+				"console.log(error",
+				"console.error(e)",
+				".catch(() =>",
+			]);
+
+			if (evidence.length < 2) return null;
+
+			return {
+				category: "reliability",
+				label: `${evidence.length} error handling patterns found`,
+				evidence: evidence.slice(0, 5),
+				purposeData: {
+					id: "error-handling",
+					purpose: `Errors must be handled explicitly: catch blocks must either recover, re-throw with context, or log with structured data — never swallow silently. Unhandled promise rejections and generic catch-all blocks are the #1 cause of invisible production failures.`,
+					violations: [
+						"Empty catch block — error silently swallowed, no logging, no recovery",
+						"catch block with only console.log — no structured logging, no error tracking",
+						"Generic catch-all (catch(e){}) without re-throwing or handling specific error types",
+						"Promise without .catch() or try/catch — unhandled rejection crashes process",
+						"Error message is generic ('Something went wrong') — no context for debugging",
+						"Stack trace or internal error details exposed in API response to client",
+						"Async function without top-level try/catch — errors disappear silently",
+					],
+					good_example: {
+						title: "Structured error handling with context",
+						code: `try {\n  await processPayment(order);\n} catch (error) {\n  if (error instanceof InsufficientBalanceError) {\n    return res.status(402).json({ code: "INSUFFICIENT_BALANCE" });\n  }\n  logger.error("Payment failed", { orderId: order.id, error: error.message, stack: error.stack });\n  throw error; // re-throw unexpected errors\n}`,
+					},
+					bad_example: {
+						title: "Swallowed error",
+						code: `try {\n  await processPayment(order);\n} catch (e) {\n  console.log(e); // logged to stdout, lost in production\n  // error swallowed — caller thinks payment succeeded\n}`,
+					},
+					context_hint: "Search for empty catch blocks, catch blocks with only console.log, .catch(() => {}), and async functions without error handling. Every catch should either recover (return fallback), re-throw with context, or log with structured data (logger, not console).",
+					scope: langGlob(ctx),
+					severity: "warning",
+				},
+			};
+		},
+	},
+
+	// 9. Secret / Credential Leakage
+	{
+		name: "secret-leakage",
+		category: "security",
+		detect(ctx) {
+			const evidence = searchFiles(ctx, [
+				"sk_live_",
+				"sk_test_",
+				"AKIA",
+				"api_key =",
+				"apiKey:",
+				"secret =",
+				"password =",
+				"SECRET_KEY",
+				"PRIVATE_KEY",
+			]);
+
+			// Check for .env in git
+			const envFiles = ctx.files.filter((f) =>
+				f === ".env" || f === ".env.local" || f === ".env.production",
+			);
+
+			if (evidence.length < 1 && envFiles.length === 0) return null;
+
+			return {
+				category: "security",
+				label: `${evidence.length} potential secret patterns${envFiles.length ? " + .env files tracked" : ""}`,
+				evidence: [
+					...envFiles.map((f) => ({ file: f, snippet: "WARNING: .env file tracked in git" })),
+					...evidence,
+				].slice(0, 5),
+				purposeData: {
+					id: "secret-safety",
+					purpose: `Secrets (API keys, tokens, passwords, private keys) must NEVER appear in source code, git history, logs, or API responses. All secrets must come from environment variables or a secrets manager. .env files must be in .gitignore.`,
+					violations: [
+						"API keys, tokens, or passwords hardcoded in source files",
+						".env or .env.production tracked in git (must be in .gitignore)",
+						"Secrets logged in error messages, console.log, or structured logs",
+						"API error responses exposing internal stack traces, DB connection strings, or config values",
+						"Secret values in client-side code (React components, browser JS) — visible to users",
+						"Default/fallback secret values in code (const secret = process.env.SECRET || 'default-key')",
+						"Secrets committed in previous git commits even if removed from current code",
+					],
+					good_example: {
+						title: "Secrets from environment",
+						code: `const stripeKey = process.env.STRIPE_SECRET_KEY;\nif (!stripeKey) throw new Error("STRIPE_SECRET_KEY not configured");\n\n// .gitignore\n.env\n.env.*\n\n// Error response — no internals\nres.status(500).json({ error: "Internal server error", requestId });`,
+					},
+					bad_example: {
+						title: "Hardcoded secrets",
+						code: `const stripe = new Stripe("sk_live_abc123def456");\nconst dbUrl = "postgresql://admin:password123@prod-db:5432/app";\n\n// Logged to stdout\nconsole.log("Auth failed for token:", req.headers.authorization);`,
+					},
+					context_hint: "Search for: sk_live_, sk_test_, AKIA (AWS), hardcoded strings assigned to variables named key/secret/password/token, .env files not in .gitignore, console.log/logger calls that include token/key/secret variables, and error responses that include stack traces.",
+					scope: langGlob(ctx),
+					severity: "error",
+				},
+			};
+		},
+	},
+
+	// 10. API Contract Safety
+	{
+		name: "api-contract",
+		category: "api",
+		detect(ctx) {
+			const hasApi = ctx.files.some((f) =>
+				f.includes("routes/") || f.includes("controllers/") || f.includes("handlers/") || f.includes("api/"),
+			);
+
+			const evidence = searchFiles(ctx, [
+				"res.json(",
+				"res.send(",
+				"res.status(",
+				"jsonify(",
+				"JsonResponse(",
+				"Response(",
+				"@Get(",
+				"@Post(",
+				"@app.route",
+				"router.get(",
+				"router.post(",
+			]);
+
+			if (!hasApi || evidence.length < 3) return null;
+
+			// Check for validation libraries
+			const zod = hasDependency(ctx, "zod");
+			const joi = hasDependency(ctx, "joi");
+			const classValidator = hasDependency(ctx, "class-validator");
+			const pydantic = hasDependency(ctx, "pydantic");
+			const validator = zod || joi || classValidator || pydantic;
+
+			return {
+				category: "api",
+				label: `API endpoints detected${validator ? ` + ${validator} validation` : ""}`,
+				evidence: evidence.slice(0, 5),
+				purposeData: {
+					id: "api-contract",
+					purpose: `API endpoints must validate all input at the boundary, return consistent response shapes, and never break existing clients. Input validation → business logic → consistent response is the required sequence. Missing validation means untrusted data hits your database. Inconsistent responses break mobile apps silently.`,
+					violations: [
+						"SEQUENCE BREAK: Request body used directly without validation/parsing (req.body.email without schema check)",
+						"MISSING STEP: No input validation on POST/PUT/PATCH endpoints — raw user input reaches DB or services",
+						"CONTRACT BREAK: Response shape changes between success/error (sometimes {data}, sometimes {result}, sometimes raw array)",
+						"CONTRACT BREAK: Nullable field added to response without versioning — existing clients crash on null",
+						"LEAK: Error responses exposing stack traces, SQL errors, or internal implementation details",
+						"MISSING: No pagination on list endpoints — response grows unbounded with data",
+						"MISSING: No request size limit — large payloads cause OOM or slow processing",
+					],
+					good_example: {
+						title: "Validated input, consistent response",
+						code: `// Step 1: VALIDATE at boundary\nconst input = createUserSchema.parse(req.body);\n// Step 2: BUSINESS LOGIC with validated data\nconst user = await userService.create(input);\n// Step 3: CONSISTENT response shape\nres.json({ data: user, meta: { requestId } });\n\n// Error shape matches\nres.status(400).json({ error: { code: "VALIDATION_ERROR", details } });`,
+					},
+					bad_example: {
+						title: "No validation, inconsistent response",
+						code: `// Raw input — SQL injection, type errors, garbage data\nconst user = await db.user.create({ data: req.body });\n// Sometimes returns array, sometimes object\nres.json(users); // vs res.json({ data: user })\n// Error leaks internals\nres.status(500).json({ error: err.message, stack: err.stack });`,
+					},
+					context_hint: "Check every POST/PUT/PATCH handler for input validation as the FIRST operation. Check response shapes for consistency (always {data} or always {items, total}). Check error handlers for internal detail leakage.",
+					scope: langGlob(ctx),
+					severity: "warning",
+				},
+			};
+		},
+	},
+
+	// 11. N+1 / Performance Anti-patterns
+	{
+		name: "performance",
+		category: "performance",
+		detect(ctx) {
+			const orm = hasDependency(ctx, "@prisma/client", "typeorm", "drizzle-orm", "sequelize", "mongoose", "sqlalchemy", "django");
+
+			const evidence = searchFiles(ctx, [
+				"for (const",
+				"for (let",
+				"forEach(",
+				"for await",
+				".map(async",
+				"Promise.all",
+				"findUnique(",
+				"findOne(",
+				"findById(",
+				".get(",
+			]);
+
+			// Look specifically for await-in-loop patterns
+			const loopAwaitEvidence = searchFiles(ctx, [
+				"await ",
+			], ["**/*.{ts,js,py}"]);
+
+			if (!orm && evidence.length < 3) return null;
+
+			return {
+				category: "performance",
+				label: `${orm || "database"} + loop patterns detected`,
+				evidence: evidence.slice(0, 5),
+				purposeData: {
+					id: "performance-safety",
+					purpose: `Database queries must never run inside loops (N+1 problem). Parallelizable async operations must not be sequential. Data filtering must happen in the query, not in application memory. These patterns cause linear or exponential slowdown as data grows.`,
+					violations: [
+						"N+1: DB query inside a for/forEach/map loop — use batch query or join instead",
+						"SEQUENTIAL: await inside for-loop for independent operations — use Promise.all",
+						"MEMORY: Loading all records then filtering in JS/Python (findMany → .filter) instead of WHERE clause",
+						"UNBOUNDED: Query without limit/pagination on user-facing endpoint — response time grows with data",
+						"MISSING: No index hint for frequently filtered/sorted columns — full table scan",
+						"BLOCKING: CPU-intensive operation (JSON.parse of large payload, crypto, image processing) on main thread without worker",
+					],
+					good_example: {
+						title: "Batch query + parallel execution",
+						code: `// Batch: one query instead of N\nconst users = await db.user.findMany({\n  where: { id: { in: userIds } },\n  take: 20, // bounded\n});\n\n// Parallel: independent operations\nconst [profile, orders, settings] = await Promise.all([\n  getProfile(userId),\n  getOrders(userId),\n  getSettings(userId),\n]);`,
+					},
+					bad_example: {
+						title: "N+1 + sequential + memory filter",
+						code: `// N+1: query per iteration\nfor (const orderId of orderIds) {\n  const order = await db.order.findUnique({ where: { id: orderId } });\n  results.push(order);\n}\n\n// Memory filter: loads ALL then filters\nconst allUsers = await db.user.findMany();\nconst active = allUsers.filter(u => u.active);`,
+					},
+					context_hint: "Search for await/query calls inside for/forEach/map loops. Check findMany/find calls for missing where/limit. Look for .filter() after findMany (should be WHERE clause). Check sequential awaits that could be Promise.all.",
 					scope: langGlob(ctx),
 					severity: "warning",
 				},
