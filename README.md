@@ -432,11 +432,17 @@ npm run build
 
 ---
 
-<p align="center">
-  <a href="https://github.com/room821/purplelint">
-    <img src="https://img.shields.io/github/stars/room821/purplelint?style=social" alt="GitHub stars">
-  </a>
-</p>
+## Star History
+
+<a href="https://star-history.com/#room821/purplelint&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=room821/purplelint&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=room821/purplelint&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=room821/purplelint&type=Date" width="600" />
+ </picture>
+</a>
+
+---
 
 <p align="center">
   If purplelint saves your team from a sequence bug,<br>
