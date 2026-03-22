@@ -1,0 +1,12 @@
+id: auth-boundary
+purpose: Auth must be in middleware only.
+violations:
+  - Token verification outside middleware
+good_examples:
+  - title: "Middleware auth"
+    code: |
+      app.use("/api", authMiddleware);
+bad_examples:
+  - title: "Handler auth"
+    code: |
+      const token = req.headers.authorization;

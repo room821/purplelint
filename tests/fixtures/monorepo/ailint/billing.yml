@@ -1,0 +1,12 @@
+id: billing
+purpose: Root-level billing purpose.
+violations:
+  - Direct API calls
+good_examples:
+  - title: "Good"
+    code: |
+      import { x } from "sdk";
+bad_examples:
+  - title: "Bad"
+    code: |
+      fetch("https://api.example.com");

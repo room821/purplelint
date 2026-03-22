@@ -1,0 +1,10 @@
+version: "0.1"
+
+config:
+  inherit: false
+
+purposes:
+  - id: race-condition
+    file: race-condition.yml
+    severity: error
+    scope: "src/**/*.ts"

@@ -1,0 +1,19 @@
+id: billing
+purpose: >
+  All AI calls must go through the SDK for billing tracking.
+violations:
+  - Direct API calls to LLM endpoints
+  - Custom wrappers bypassing SDK
+good_examples:
+  - title: "SDK call"
+    code: |
+      import { completion } from "@org/ai-client";
+      const result = await completion({ model: "gpt-4", prompt });
+bad_examples:
+  - title: "Direct fetch"
+    code: |
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {});
+context_hint: >
+  Check import chains for SDK usage.
+exceptions:
+  - "Test files"

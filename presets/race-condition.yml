@@ -1,0 +1,49 @@
+id: race-condition
+purpose: >
+  Shared state mutations must guarantee concurrency safety.
+  Read-modify-write without transactions, shared resource access without locks,
+  and non-idempotent state changes based on external API results
+  will corrupt data integrity under concurrent load.
+violations:
+  - DB read followed by write in the same function without transaction wrapping
+  - Shared cache/state modification without lock or atomic operation
+  - Non-idempotent state changes based on external API call results
+  - Counter/balance/inventory updates without optimistic locking or transactions
+  - Multiple sequential DB writes that should be atomic
+good_examples:
+  - title: "Transaction-wrapped read-modify-write"
+    code: |
+      await db.$transaction(async (tx) => {
+        const account = await tx.account.findUnique({ where: { id } });
+        if (account.balance < amount) throw new InsufficientBalanceError();
+        await tx.account.update({
+          where: { id },
+          data: { balance: account.balance - amount }
+        });
+      });
+  - title: "Idempotent operation with idempotency key"
+    code: |
+      const existing = await db.payment.findUnique({ where: { idempotencyKey } });
+      if (existing) return existing;
+      await db.$transaction(async (tx) => {
+        await tx.payment.create({ data: { idempotencyKey, amount, status: "pending" } });
+        const result = await paymentGateway.charge(amount);
+        await tx.payment.update({ where: { idempotencyKey }, data: { status: result.status } });
+      });
+bad_examples:
+  - title: "Read-modify-write without transaction"
+    code: |
+      const account = await db.account.findUnique({ where: { id } });
+      await db.account.update({
+        where: { id },
+        data: { balance: account.balance - amount }
+      });
+  - title: "Non-atomic sequential writes"
+    code: |
+      await db.order.update({ where: { id }, data: { status: "paid" } });
+      await db.inventory.update({ where: { productId }, data: { stock: stock - 1 } });
+      // If second write fails, order is "paid" but stock not decremented
+context_hint: >
+  Look for patterns where a DB read and DB write operate on the same record
+  within the same function but without a transaction wrapper.
+  Pay special attention to balance, stock, counter, and quota values.

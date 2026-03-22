@@ -1,0 +1,53 @@
+id: test-integrity
+purpose: >
+  Tests must validate actual behavior, not just existence.
+  Superficial tests with weak assertions, implementation-coupled tests,
+  and tests for impossible scenarios create false confidence.
+violations:
+  - Tests with no assertions or only trivial assertions (toBeDefined, toBeTruthy on non-null)
+  - Tests that verify internal method call order instead of input→output behavior
+  - Overly broad error catches (expect(() => ...).toThrow() without specific error type/message)
+  - Tests for scenarios that cannot occur given current business rules
+  - Test descriptions that don't match what's actually being tested
+good_examples:
+  - title: "Behavior-focused test with specific assertions"
+    code: |
+      test("withdrawal fails when balance insufficient", async () => {
+        const account = new Account({ balance: 100 });
+        await expect(account.withdraw(200)).rejects.toThrow(InsufficientBalanceError);
+        expect(account.balance).toBe(100); // balance unchanged
+      });
+  - title: "Integration test verifying actual outcome"
+    code: |
+      test("order creation decrements inventory", async () => {
+        await seedProduct({ id: "p1", stock: 10 });
+        await orderService.create({ productId: "p1", quantity: 3 });
+        const product = await productRepo.findById("p1");
+        expect(product.stock).toBe(7);
+      });
+bad_examples:
+  - title: "Trivial assertion"
+    code: |
+      test("creates user", async () => {
+        const user = await userService.create({ name: "test" });
+        expect(user).toBeDefined(); // tells us nothing useful
+      });
+  - title: "Implementation-coupled test"
+    code: |
+      test("sends welcome email", async () => {
+        await userService.create({ name: "test" });
+        expect(mockEmailService.send).toHaveBeenCalledTimes(1);
+        expect(mockEmailService.send).toHaveBeenCalledBefore(mockLogger.info);
+        // Testing call order, not behavior
+      });
+  - title: "Broad error catch"
+    code: |
+      test("handles error", async () => {
+        await expect(service.process(null)).rejects.toThrow();
+        // What error? Why? Is this even a real scenario?
+      });
+context_hint: >
+  Check if expect/assert statements validate meaningful business outcomes.
+  Flag toBeDefined(), toBeTruthy() when used as the only assertion.
+  Flag mock call order verification (toHaveBeenCalledBefore/After).
+  Flag toThrow() without a specific error class or message matcher.

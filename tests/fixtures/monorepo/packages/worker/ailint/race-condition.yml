@@ -1,0 +1,12 @@
+id: race-condition
+purpose: Worker must use transactions for shared state.
+violations:
+  - Read-modify-write without transaction
+good_examples:
+  - title: "Transaction"
+    code: |
+      await db.$transaction(async (tx) => { ... });
+bad_examples:
+  - title: "No transaction"
+    code: |
+      const x = await db.find(); await db.update();

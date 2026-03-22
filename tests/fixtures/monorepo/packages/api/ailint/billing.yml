@@ -1,0 +1,12 @@
+id: billing
+purpose: API-specific billing — override root.
+violations:
+  - Direct API calls without SDK
+good_examples:
+  - title: "SDK call"
+    code: |
+      import { call } from "@org/sdk";
+bad_examples:
+  - title: "Direct"
+    code: |
+      fetch("https://api.openai.com/...");

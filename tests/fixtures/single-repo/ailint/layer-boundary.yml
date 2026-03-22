@@ -1,0 +1,14 @@
+id: layer-boundary
+purpose: >
+  Each layer must only handle its own responsibility.
+violations:
+  - HTTP concerns in UseCase
+good_examples:
+  - title: "Clean UseCase"
+    code: |
+      class UseCase { execute() { return result; } }
+bad_examples:
+  - title: "HTTP in UseCase"
+    code: |
+      class UseCase { execute() { return { status: 200 }; } }
+context_hint: Check return types.

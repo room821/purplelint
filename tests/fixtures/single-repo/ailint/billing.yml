@@ -1,0 +1,14 @@
+id: billing
+purpose: >
+  All AI calls must go through the SDK.
+violations:
+  - Direct API calls
+good_examples:
+  - title: "SDK call"
+    code: |
+      import { completion } from "@org/ai-client";
+bad_examples:
+  - title: "Direct fetch"
+    code: |
+      const res = await fetch("https://api.openai.com/...");
+context_hint: Check imports.

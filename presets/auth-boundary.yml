@@ -1,0 +1,45 @@
+id: auth-boundary
+purpose: >
+  Authentication and authorization must be handled exclusively by designated
+  middleware/guards. When individual handlers or services implement auth logic
+  directly, it creates bypassable security gaps.
+violations:
+  - Token parsing/verification in handlers or controllers (jwt.verify, jwt.decode, etc.)
+  - Auth state checking logic implemented in service layer
+  - Direct access to req.headers.authorization outside middleware
+  - Route definitions without auth middleware that should have it
+  - Role/permission checks scattered across service methods instead of centralized guards
+good_examples:
+  - title: "Auth handled by middleware"
+    code: |
+      // middleware/auth.ts
+      app.use("/api", authMiddleware);
+
+      // handlers/users.ts — auth is already handled
+      app.get("/api/users", async (req, res) => {
+        const users = await userService.list(req.user.id);
+        res.json(users);
+      });
+bad_examples:
+  - title: "Token verification in handler"
+    code: |
+      app.get("/api/users", async (req, res) => {
+        const token = req.headers.authorization?.split(" ")[1];
+        const decoded = jwt.verify(token, SECRET);
+        const users = await userService.list(decoded.userId);
+        res.json(users);
+      });
+  - title: "Role check in service"
+    code: |
+      class OrderService {
+        async cancelOrder(userId: string, orderId: string, userRole: string) {
+          if (userRole !== "admin" && userRole !== "manager") {
+            throw new ForbiddenError();
+          }
+          // ...
+        }
+      }
+context_hint: >
+  Search for jwt, token, verify, decode, authorization keywords
+  used outside middleware directories.
+  Also check for role/permission string comparisons in service files.

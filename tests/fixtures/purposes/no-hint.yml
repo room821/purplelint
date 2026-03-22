@@ -1,0 +1,13 @@
+id: no-hint
+purpose: >
+  Test purpose without context_hint.
+violations:
+  - Some violation
+good_examples:
+  - title: "Good"
+    code: |
+      const x = 1;
+bad_examples:
+  - title: "Bad"
+    code: |
+      const x = 2;

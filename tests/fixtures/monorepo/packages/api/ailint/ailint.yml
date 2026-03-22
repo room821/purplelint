@@ -1,0 +1,15 @@
+version: "0.1"
+
+config:
+  context_strategy: "diff+imports"
+
+purposes:
+  - id: auth-boundary
+    file: auth-boundary.yml
+    severity: error
+    scope: "src/**/*.ts"
+
+  - id: billing
+    file: billing.yml
+    severity: warning
+    scope: "src/services/**/*.ts"

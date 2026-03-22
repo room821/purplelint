@@ -1,0 +1,65 @@
+id: layer-boundary
+purpose: >
+  Each layer must only handle its own responsibility.
+  When HTTP response formatting leaks into UseCases, or framework types
+  leak into Domain Entities, transport layer replacement becomes impossible.
+  The dependency rule: outer layers depend on inner layers, never the reverse.
+violations:
+  - UseCase/Service layer directly handling HTTP status codes, response formatting, or headers
+  - Domain Entity using ORM decorators, framework-specific types, or database annotations
+  - Repository interface depending on specific DB client types (Prisma, TypeORM, etc.)
+  - Controller/Handler containing business logic that should be in a UseCase
+  - Inner layer importing from outer layer packages
+good_examples:
+  - title: "UseCase returns business result only"
+    code: |
+      class ActivateUserUseCase {
+        constructor(private userRepo: UserRepository) {}
+        async execute(userId: string): Promise<User> {
+          const user = await this.userRepo.findById(userId);
+          return user.activate();
+        }
+      }
+  - title: "Clean domain entity"
+    code: |
+      class User {
+        constructor(
+          public readonly id: string,
+          public readonly name: string,
+          private active: boolean
+        ) {}
+        activate(): User {
+          return new User(this.id, this.name, true);
+        }
+      }
+bad_examples:
+  - title: "HTTP concerns in UseCase"
+    code: |
+      class ActivateUserUseCase {
+        async execute(userId: string) {
+          const user = await this.userRepo.findById(userId);
+          user.activate();
+          return { status: 200, body: { user, message: "activated" } };
+        }
+      }
+  - title: "ORM decorators in Domain Entity"
+    code: |
+      @Entity()
+      class User {
+        @PrimaryGeneratedColumn()
+        id: number;
+        @Column()
+        name: string;
+      }
+  - title: "Business logic in Controller"
+    code: |
+      app.post("/users/:id/activate", async (req, res) => {
+        const user = await db.user.findUnique({ where: { id: req.params.id } });
+        if (user.subscription === "expired") throw new Error("Cannot activate");
+        await db.user.update({ where: { id: req.params.id }, data: { active: true } });
+        res.json({ user });
+      });
+context_hint: >
+  Focus on function return types and parameter types.
+  Even without direct imports, framework dependencies can leak through type inference chains.
+  Check if inner layer files import anything from outer layer directories.

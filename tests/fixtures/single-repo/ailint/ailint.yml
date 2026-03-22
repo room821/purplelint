@@ -1,0 +1,16 @@
+version: "0.1"
+
+config:
+  context_strategy: "diff+imports"
+  output_format: "json"
+
+purposes:
+  - id: billing
+    file: billing.yml
+    severity: error
+    scope: "src/**/*.ts"
+
+  - id: layer-boundary
+    file: layer-boundary.yml
+    severity: warning
+    scope: "src/**/*.ts"

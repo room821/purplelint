@@ -1,0 +1,43 @@
+id: billing
+purpose: >
+  All external AI/API calls must go through the designated SDK for usage tracking.
+  Direct calls bypass billing and cause revenue leakage.
+  This applies to any HTTP call targeting LLM provider endpoints.
+violations:
+  - Direct fetch/axios/got calls to LLM provider endpoints (OpenAI, Anthropic, Google AI, etc.)
+  - Billing metadata missing from API calls (userId, requestId, featureFlag, etc.)
+  - Custom wrapper functions that bypass the official SDK
+  - Hardcoded API keys instead of using SDK's key management
+good_examples:
+  - title: "SDK call with metadata"
+    code: |
+      import { completion } from "@your-org/ai-client";
+      const result = await completion({
+        model: "gpt-4",
+        prompt,
+        metadata: { userId, featureFlag: "chat-v2" }
+      });
+bad_examples:
+  - title: "Direct fetch to OpenAI"
+    code: |
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        headers: { Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model: "gpt-4", messages }),
+      });
+  - title: "Custom wrapper bypassing SDK"
+    code: |
+      // utils/ai.ts
+      export async function callAI(prompt: string) {
+        return fetch("https://api.anthropic.com/v1/messages", { ... });
+      }
+      // service.ts
+      import { callAI } from "../utils/ai";
+      const result = await callAI(prompt);
+context_hint: >
+  Trace import chains and function call chains.
+  Check if the final destination of any AI-related call goes through the SDK.
+  Watch for wrapper functions that look legitimate but bypass billing.
+exceptions:
+  - "Test files (*.test.ts, *.spec.ts)"
+  - "Mock/fixture files"
+  - "SDK implementation itself"
