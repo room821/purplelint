@@ -41,7 +41,7 @@ async function main() {
 	}
 
 	if (command === "--version") {
-		console.log("purplelint 0.5.0");
+		console.log("purplelint 0.6.0");
 		process.exit(0);
 	}
 

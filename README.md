@@ -4,10 +4,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/room821/purplelint/stargazers"><img src="https://img.shields.io/github/stars/room821/purplelint?style=flat" alt="GitHub stars"></a>
   <a href="https://www.npmjs.com/package/purplelint"><img src="https://img.shields.io/npm/v/purplelint.svg" alt="npm version"></a>
   <a href="https://github.com/room821/purplelint/actions"><img src="https://github.com/room821/purplelint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/room821/purplelint/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/purplelint.svg" alt="license"></a>
   <a href="https://www.npmjs.com/package/purplelint"><img src="https://img.shields.io/npm/dm/purplelint.svg" alt="downloads"></a>
+  <a href="https://github.com/room821/purplelint/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/purplelint.svg" alt="license"></a>
+  <img src="https://img.shields.io/node/v/purplelint.svg" alt="node version">
 </p>
 
 ---
@@ -366,6 +368,48 @@ validate options:
 
 No runtime dependencies on any specific LLM provider. purplelint generates prompts — you choose who evaluates them.
 
+## Purpose Hub — Build Your Own
+
+Purpose files are just YAML. You can build your own collection and share it across projects.
+
+**Share via git:**
+```bash
+# Team-wide purpose library
+git clone https://github.com/your-org/purplelint-purposes.git purplelint/
+```
+
+**Share via npm:**
+```bash
+# Publish as a package
+npm install -D @your-org/purplelint-purposes
+
+# Symlink or copy into your project
+cp node_modules/@your-org/purplelint-purposes/*.yml purplelint/
+```
+
+**Share via gist:**
+```bash
+# Download a single purpose
+curl -o purplelint/oauth-flow.yml https://gist.githubusercontent.com/.../oauth-flow.yml
+```
+
+**Build a domain-specific hub:**
+```
+your-org/purplelint-purposes/
+├── fintech/
+│   ├── pci-compliance.yml
+│   ├── transaction-audit.yml
+│   └── anti-fraud-sequence.yml
+├── healthcare/
+│   ├── hipaa-data-flow.yml
+│   └── consent-sequence.yml
+└── saas/
+    ├── tenant-isolation.yml
+    └── subscription-lifecycle.yml
+```
+
+Each purpose file is self-contained — `id`, `purpose`, `violations`, `examples`. No build step. No config inheritance. Copy the YAML, run the check.
+
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
@@ -380,7 +424,7 @@ npm run build
 
 **Adding a new detector:** Create a detector in `src/core/scanner.ts`, add a preset in `presets/`, and add tests. See existing detectors for the pattern.
 
-**Sharing purpose files:** Purpose files are just YAML. Copy them between projects, publish them as gists, or contribute them upstream.
+**Contributing purposes:** Purpose files are just YAML. Create a `.yml` following the [purpose file schema](#purpose-file-anatomy), test it with `npx purplelint validate`, and open a PR.
 
 ## License
 
