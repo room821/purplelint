@@ -12,7 +12,7 @@ export async function selectPurposes(
 	purposes: { id: string; purpose: string }[],
 ): Promise<string[]> {
 	const result = await p.multiselect({
-		message: "Select purposes to check:",
+		message: "Select purposes to check:  (space: toggle, a: all, enter: confirm)",
 		options: purposes.map((pur) => ({
 			value: pur.id,
 			label: `${pur.id} — ${pur.purpose.split("\n")[0].trim()}`,

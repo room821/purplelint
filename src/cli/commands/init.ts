@@ -60,7 +60,7 @@ export async function runInit(options: InitOptions) {
 		selectedResults = scanResults;
 	} else {
 		const choices = await p.multiselect({
-			message: "Generate purpose files for:",
+			message: "Generate purpose files for:  (space: toggle, a: all, enter: confirm)",
 			options: scanResults.map((r) => ({
 				value: r.purposeData.id,
 				label: `${r.purposeData.id} — ${r.purposeData.purpose.split(".")[0].trim()}`,
