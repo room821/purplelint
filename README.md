@@ -86,24 +86,37 @@ This isn't a regex. It's a sequence diagram encoded as a purpose, evaluated by a
 npx purplelint init
 ```
 
-That's it. purplelint scans your project, detects your stack, and generates purpose files tailored to what you actually use:
+That's it. purplelint scans your project, detects your stack, and walks you through the full setup:
 
 ```
 ┌  purplelint — Architecture Checkpoint
 │
 ◇  Found 9 architecture pattern(s)
 │
-◆  Generate purpose files for:
+◆  Generate purpose files for:  (space: toggle, a: all, enter: confirm)
 │  ◼ billing-tracking — Payment flows must follow a strict sequence
 │  ◼ auth-boundary — Auth must follow a strict sequence per request
-│  ◼ transaction-safety — Database operations require transactions
-│  ◼ layer-boundary — Layer structure must be maintained
-│  ◼ test-integrity — Tests must have meaningful assertions
-│  ◼ design-system — Components must use the design system
-│  ◼ error-handling — Errors must be handled explicitly
-│  ◼ secret-safety — Secrets must never appear in source code
-│  ◼ api-contract — API endpoints must validate input
-└
+│  ◼ oauth-flow — OAuth must follow state+PKCE → callback → verify → exchange
+│  ◼ cache-safety — Cache must enforce TTL, invalidation, and stampede protection
+│  ◼ data-integrity — Database must enforce uniqueness at DB level
+│  ...
+│
+◆  Detected: Claude, Codex
+│
+◆  Continue with:
+│  ● Claude
+│  ○ Codex
+│  ○ Skip
+│
+◆  When should purplelint run?
+│  ○ Every commit (pre-commit hook)
+│  ○ Before push (pre-push hook)
+│  ● PR only (GitHub Actions CI)
+│  ○ Manual only (npm run purplelint)
+│
+◇  Created .github/workflows/purplelint.yml
+◇  Saved setup guide: purplelint/SETUP.md
+└  Ready
 ```
 
 Then run checks:
@@ -118,6 +131,9 @@ npx purplelint run --purpose billing-tracking
 # All purposes
 npx purplelint run --all
 
+# Skip a purpose for N days
+npx purplelint skip billing-tracking 7
+
 # Validate purpose file schema
 npx purplelint validate
 
@@ -125,7 +141,7 @@ npx purplelint validate
 npx purplelint list
 ```
 
-## Auto-Detection: 11 Built-in Detectors
+## Auto-Detection: 14 Built-in Detectors
 
 `purplelint init` doesn't dump a generic config. It reads your `package.json`, `requirements.txt`, `pyproject.toml`, and source files, then generates only the purposes that apply to your stack.
 
@@ -133,6 +149,7 @@ npx purplelint list
 |---|---|---|
 | **billing-tracking** | Payment sequence: verify -> persist -> deduplicate -> process -> acknowledge | Stripe, Paddle, LemonSqueezy, or payment patterns in code |
 | **auth-boundary** | Auth sequence: extract -> verify -> validate -> attach -> check | jsonwebtoken, jose, passport, next-auth, or JWT patterns |
+| **oauth-flow** | OAuth sequence: state+PKCE -> callback -> verify state -> exchange code | OAuth/OIDC patterns, Google/GitHub/Auth0 providers |
 | **transaction-safety** | Transaction wrapping, unbounded queries, soft delete | Prisma, TypeORM, Drizzle, SQLAlchemy, Django ORM |
 | **layer-boundary** | Controller/service/repo separation of concerns | Express/Fastify routes, Django views, Spring controllers |
 | **test-integrity** | Weak assertions, snapshot abuse, mock anti-patterns | Jest, Vitest, pytest, or test files detected |
@@ -142,6 +159,8 @@ npx purplelint list
 | **api-contract** | Missing input validation, inconsistent responses, stack trace leaks | Express, Fastify, Django REST, Spring Boot |
 | **performance** | N+1 queries, await-in-loop, unbounded queries | ORM or database usage detected |
 | **race-condition** | Unsafe concurrent state mutations | Concurrent processing patterns detected |
+| **cache-safety** | Missing TTL, stale cache, stampede, shared key collisions | Redis, Memcached, node-cache, or caching patterns |
+| **data-integrity** | Check-then-insert races, missing DB-level uniqueness constraints | ORM usage with unique fields or upsert patterns |
 
 **Language-agnostic.** Works with TypeScript, Python, Go, Java, Rust, Ruby, and mixed-language monorepos.
 
@@ -175,7 +194,7 @@ The same applies to auth flows (decode before verify = accept unsigned tokens) a
 
 ## Agent-Agnostic
 
-purplelint produces structured prompts. Pipe them to any LLM.
+purplelint produces structured prompts. Pipe them to any LLM. `purplelint init` auto-detects installed agents and offers to run your first check immediately.
 
 **Claude Code:**
 ```bash
@@ -277,7 +296,7 @@ Each purpose is both a lint rule AND documentation. New engineers read these and
 
 **"When in doubt, pass."** The prompt explicitly instructs models to only flag clear violations. False positives kill trust faster than missed bugs.
 
-**Selective execution.** Not every commit. Not every purpose. You choose what to check and when. This is an architecture checkpoint, not a style cop.
+**You choose when it runs.** Every commit, before push, on PRs only, or manual. `purplelint init` sets up the integration you pick — hooks, CI, scripts. This is an architecture checkpoint, not a style cop.
 
 **Sequence-first violations.** Instead of "don't do X", purplelint says "step 4 must come after step 2." Order-of-operations bugs cause the most expensive incidents.
 
@@ -313,6 +332,7 @@ Commands:
   validate          Validate purpose files against schema
   run               Run architecture checks
   list              List configured purposes
+  skip              Skip a purpose for N days
 
 Options:
   --help, -h        Show help
@@ -330,6 +350,10 @@ run options:
   --diff <ref>      Git diff reference (default: staged changes)
   --context <mode>  Context strategy: diff, diff+imports
   --dir <path>      Config directory
+
+skip options:
+  purplelint skip <id> <days>   Skip a purpose for N days
+  purplelint skip --clear       Clear all skips
 
 validate options:
   --dir <path>      Config directory
