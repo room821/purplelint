@@ -14,13 +14,7 @@
 			"types": "./dist/index.d.ts"
 		}
 	},
-	"files": [
-		"dist",
-		"presets",
-		"templates",
-		"README.md",
-		"LICENSE"
-	],
+	"files": ["dist", "presets", "templates", "README.md", "LICENSE"],
 	"scripts": {
 		"build": "tsup",
 		"dev": "tsup --watch",
