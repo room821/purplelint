@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for ailint
+about: Suggest an idea for purplelint
 title: "[Feature] "
 labels: enhancement
 assignees: ""

@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report an issue with ailint
+about: Report an issue with purplelint
 title: "[Bug] "
 labels: bug
 assignees: ""
@@ -12,7 +12,7 @@ A clear description of the bug.
 
 ## Steps to Reproduce
 
-1. Run `npx ailint ...`
+1. Run `npx purplelint ...`
 2. ...
 
 ## Expected Behavior
@@ -27,4 +27,4 @@ What actually happens.
 
 - OS:
 - Node.js version:
-- ailint version:
+- purplelint version:

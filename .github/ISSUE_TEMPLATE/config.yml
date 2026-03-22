@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/room821/purplelint#readme
+    about: Check the README before opening an issue
+  - name: npm
+    url: https://www.npmjs.com/package/purplelint
+    about: Install purplelint from npm
